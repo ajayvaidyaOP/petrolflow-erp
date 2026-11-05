@@ -3527,6 +3527,9 @@ public final class BackendTests {
         Main.resetDatabase(base);
         Main.apply(base.mysqlDir().resolve("schema.sql"));
         Main.seedIfEmpty(base);
+        // Earlier steps may have throttled this address or account; this verifier exercises the
+        // throttle deliberately, so it starts from an empty counter table.
+        Db.exec("DELETE FROM login_throttle_attempts");
 
         // A normal sign-in still works while under the limit.
         HttpResponse<String> ok = post(client, loginUrl, null, Map.of("email", email, "password", base.demoPassword));
@@ -3642,6 +3645,11 @@ public final class BackendTests {
 
         // A4: a production-configured API serves no demo shortcuts and refuses demo logins, while a
         // real (non-demo) account still signs in normally.
+        //
+        // The throttle table is shared MySQL state and the runs above deliberately exhaust the
+        // limits (60 failed sign-ins from one address). Clear it, then use a fresh client address:
+        // otherwise these requests are rejected with 429 before the production rule is reached.
+        Db.exec("DELETE FROM login_throttle_attempts");
         int productionPort = 4294;
         Web productionWeb = new Web(testConfig(testDb, Map.of(
                 "NODE_ENV", "production",
@@ -3657,7 +3665,8 @@ public final class BackendTests {
 
             HttpResponse<String> demoLogin = post(client, productionUrl + "/auth/login", null,
                     Map.of("email", email, "password", base.demoPassword));
-            check(demoLogin.statusCode() == 401, "A4: a demo account cannot sign in to a production API");
+            check(demoLogin.statusCode() == 401, "A4: a demo account cannot sign in to a production API (got "
+                    + demoLogin.statusCode() + " " + demoLogin.body() + ")");
             check(!demoLogin.body().toLowerCase(java.util.Locale.ROOT).contains("demo"),
                     "A4: the demo-login refusal does not disclose that the account is a demo account");
 
@@ -3669,7 +3678,8 @@ public final class BackendTests {
                     """, tempUserId, Passwords.hash("Temp-Real-Deal-2026"), now, now);
             HttpResponse<String> realLogin = post(client, productionUrl + "/auth/login", null,
                     Map.of("email", "dealer.real@example.in", "password", "Temp-Real-Deal-2026"));
-            check(realLogin.statusCode() == 200, "A4: a real non-demo account still signs in on a production API");
+            check(realLogin.statusCode() == 200, "A4: a real non-demo account still signs in on a production API (got "
+                    + realLogin.statusCode() + " " + realLogin.body() + ")");
             check(!realLogin.body().contains("sessionToken"),
                     "A4: production login responses never return the session token in the body");
 
