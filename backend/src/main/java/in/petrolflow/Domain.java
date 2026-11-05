@@ -270,7 +270,18 @@ public final class Domain {
 
     /** Must run inside the caller's transaction. Locks the tank and rejects negative book stock. */
     public static String movement(String tenantId, String stationId, String tankId, String productId, String type, String litres, String refType, String refId, String note, String userId, boolean demo, String occurredAt) {
-        Map<String, Object> tank = Db.one("SELECT id, tenant_id, station_id, product_id FROM tanks WHERE id = ? FOR UPDATE", tankId);
+        // tanks has no tenant_id column: ownership is expressed by the owning station. Read the
+        // station's tenant straight from the locked row so the check stays inside the same
+        // transaction and cannot be won by a concurrent station move.
+        Map<String, Object> tank = Db.one(
+                """
+                SELECT t.id, t.station_id, t.product_id, s.tenant_id
+                  FROM tanks t
+                  JOIN stations s ON s.id = t.station_id
+                 WHERE t.id = ?
+                   FOR UPDATE
+                """,
+                tankId);
         if (tank == null || !tenantId.equals(Db.str(tank, "tenant_id")) || !stationId.equals(Db.str(tank, "station_id")) || !productId.equals(Db.str(tank, "product_id"))) {
             throw ApiException.unprocessable("Stock movement tank/product does not belong to this station");
         }
