@@ -3651,7 +3651,9 @@ public final class BackendTests {
         // otherwise these requests are rejected with 429 before the production rule is reached.
         Db.exec("DELETE FROM login_throttle_attempts");
         int productionPort = 4294;
-        Web productionWeb = new Web(testConfig(testDb, Map.of(
+        // Build the API the way Main does. A bare `new Web(config)` has no routes registered, so the
+        // assertions below would see "No route for POST /api/v1/auth/login" instead of the guard.
+        Web productionWeb = Main.buildWeb(testConfig(testDb, Map.of(
                 "NODE_ENV", "production",
                 "PORT", String.valueOf(productionPort))));
         productionWeb.listen();
