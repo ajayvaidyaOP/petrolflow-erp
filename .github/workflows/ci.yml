@@ -131,7 +131,23 @@ jobs:
         run: npm run typecheck
 
       - name: Java 21 unit + MySQL HTTP integration tests
-        run: npm test
+        id: java-tests
+        # --console=plain keeps the suite's own lines (including ::error annotations) in order;
+        # rich consoles rewrite the output in place and can hide the failing assertion.
+        # tee keeps the tail available for the annotation step below, which does not depend on
+        # the log bundle being downloadable (it is not, on restricted networks).
+        run: |
+          set -o pipefail
+          npm test -- --console=plain 2>&1 | tee /tmp/java-tests.log
+
+      - name: Report Java test output on failure
+        if: failure() && steps.java-tests.outcome == 'failure'
+        run: |
+          python3 - <<'PY'
+          text = open('/tmp/java-tests.log', errors='replace').read()[-2000:]
+          escaped = text.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          print(f"::error title=Java backend test output::{escaped}")
+          PY
 
       - name: Build frontend assets & package Java API jar
         run: npm run build

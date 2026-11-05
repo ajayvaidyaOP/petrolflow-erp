@@ -433,8 +433,11 @@ public final class BackendTests {
 
         HttpResponse<String> openOk = post(client, url + "/inventory/opening-stock", ownerToken,
                 Web.map("tankId", emptyTankId, "litres", "2500.5"));
+        // Carry the real status and body into the failure message: a bare assertion label cannot
+        // distinguish a rejected contract change from a stock-calculation regression.
         check(openOk.statusCode() == 201 && "2500.500".equals(dataMap(openOk).get("bookStockLitres")),
-                "Step 1: Opening stock accepts {tankId, litres} and records 2500.500 L");
+                "Step 1: Opening stock accepts {tankId, litres} and records 2500.500 L [status="
+                        + openOk.statusCode() + " body=" + openOk.body() + "]");
         check(post(client, url + "/inventory/opening-stock", ownerToken,
                 Web.map("tankId", emptyTankId, "litres", "500")).statusCode() == 409,
                 "Step 1: Repeated opening stock on same tank rejected (409)");
@@ -3918,8 +3921,33 @@ public final class BackendTests {
     }
 
     private static void check(boolean condition, String label) {
-        if (!condition) throw new AssertionError("FAILED: " + label);
+        if (!condition) {
+            // Report the exact call site and a GitHub Actions error annotation as well as throwing.
+            // The runner's log bundle is not always reachable (restricted networks, expired signed
+            // URLs), and a bare "exit code 1" with a stale-looking label is not enough to debug a
+            // red build.
+            String origin = callSite();
+            System.out.println("::error title=Backend assertion failed::"
+                    + escapeAnnotation(label + " — " + origin));
+            System.out.flush();
+            throw new AssertionError("FAILED: " + label + " — " + origin);
+        }
         passed++;
         System.out.println("  [OK] " + label);
+    }
+
+    /** "method:line" of the assertion's caller, so a failure names the exact test step. */
+    private static String callSite() {
+        return StackWalker.getInstance().walk(frames -> frames
+                .filter(frame -> BackendTests.class.getName().equals(frame.getClassName()))
+                .skip(2) // check(), callSite()
+                .map(frame -> frame.getMethodName() + ":" + frame.getLineNumber())
+                .findFirst()
+                .orElse("unknown"));
+    }
+
+    /** Escapes the characters that GitHub Actions workflow commands treat specially. */
+    private static String escapeAnnotation(String value) {
+        return value.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A");
     }
 }
