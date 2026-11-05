@@ -1027,12 +1027,20 @@ public final class BackendTests {
 
         // Mark September 2026 attendance on stn1: 2 PRESENT, 1 HALF_DAY, 1 WEEK_OFF, 1 lowercase 'leave', 1 ABSENT
         // Expected payableDays = 2 + 0.5 + 1 = 3.5; leave = 1.0
-        post(client, url + "/attendance/mark", ownerToken, Web.map("stationId", stn1, "date", "2026-09-01",
-                "entries", List.of(Web.map("userId", staffId, "status", "PRESENT"))));
-        post(client, url + "/attendance/mark", ownerToken, Web.map("stationId", stn1, "date", "2026-09-02",
-                "entries", List.of(Web.map("userId", staffId, "status", "PRESENT"))));
-        post(client, url + "/attendance/mark", ownerToken, Web.map("stationId", stn1, "date", "2026-09-03",
-                "entries", List.of(Web.map("userId", staffId, "status", "HALF_DAY"))));
+        // PRESENT/HALF_DAY require an inTime (audit 4.8), so the roster sheet sends one; every mark
+        // is asserted so a rejected status cannot silently shift the payable-day totals below.
+        check(post(client, url + "/attendance/mark", ownerToken, Web.map("stationId", stn1, "date", "2026-09-01",
+                        "entries", List.of(Web.map("userId", staffId, "status", "PRESENT", "inTime", "07:00")))).statusCode() == 200,
+                "Step 8: PRESENT attendance with inTime is accepted");
+        check(post(client, url + "/attendance/mark", ownerToken, Web.map("stationId", stn1, "date", "2026-09-02",
+                        "entries", List.of(Web.map("userId", staffId, "status", "PRESENT", "inTime", "07:00", "outTime", "15:00")))).statusCode() == 200,
+                "Step 8: PRESENT attendance with in/out time is accepted");
+        check(post(client, url + "/attendance/mark", ownerToken, Web.map("stationId", stn1, "date", "2026-09-03",
+                        "entries", List.of(Web.map("userId", staffId, "status", "HALF_DAY", "inTime", "07:00")))).statusCode() == 200,
+                "Step 8: HALF_DAY attendance with inTime is accepted");
+        check(post(client, url + "/attendance/mark", ownerToken, Web.map("stationId", stn1, "date", "2026-09-07",
+                        "entries", List.of(Web.map("userId", staffId, "status", "PRESENT")))).statusCode() == 422,
+                "Step 8: PRESENT attendance without inTime is rejected (422)");
         post(client, url + "/attendance/mark", ownerToken, Web.map("stationId", stn1, "date", "2026-09-04",
                 "entries", List.of(Web.map("userId", staffId, "status", "WEEK_OFF"))));
         post(client, url + "/attendance/mark", ownerToken, Web.map("stationId", stn1, "date", "2026-09-05",

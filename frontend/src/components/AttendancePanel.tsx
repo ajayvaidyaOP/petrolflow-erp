@@ -36,6 +36,11 @@ export function AttendancePanel({ canWrite }: { canWrite: boolean }) {
   const [date, setDate] = useState(todayIst());
   const [month, setMonth] = useState(() => todayIst().slice(0, 7));
   const [marks, setMarks] = useState<Record<string, string>>({});
+  // PRESENT/HALF_DAY need an in-time (the API rejects the entry without one), and out-time is
+  // optional. Keep both per user, seeded from the sheet so an existing mark can be corrected
+  // without retyping the times.
+  const [inTimes, setInTimes] = useState<Record<string, string>>({});
+  const [outTimes, setOutTimes] = useState<Record<string, string>>({});
 
   const sheet = useQuery<{ employees: AttendanceSheetRow[] }>({
     queryKey: ['attendance', stationId, date],
@@ -50,6 +55,9 @@ export function AttendancePanel({ canWrite }: { canWrite: boolean }) {
 
   const rows = sheet.data?.employees ?? [];
   const statusOf = (row: AttendanceSheetRow) => marks[row.userId] ?? row.status ?? '';
+  const inTimeOf = (row: AttendanceSheetRow) => inTimes[row.userId] ?? row.inTime ?? '';
+  const outTimeOf = (row: AttendanceSheetRow) => outTimes[row.userId] ?? row.outTime ?? '';
+  const needsTime = (status: string) => status === 'PRESENT' || status === 'HALF_DAY';
 
   const save = useMutation({
     mutationFn: () =>
@@ -58,7 +66,12 @@ export function AttendancePanel({ canWrite }: { canWrite: boolean }) {
         date,
         entries: rows
           .filter((row) => statusOf(row))
-          .map((row) => ({ userId: row.userId, status: statusOf(row), inTime: row.inTime ?? undefined, outTime: row.outTime ?? undefined })),
+          .map((row) => ({
+            userId: row.userId,
+            status: statusOf(row),
+            inTime: inTimeOf(row) || undefined,
+            outTime: outTimeOf(row) || undefined,
+          })),
       }),
     onSuccess: () => {
       toast('Attendance saved', { description: `Attendance sheet for ${date} recorded.` });
@@ -68,6 +81,10 @@ export function AttendancePanel({ canWrite }: { canWrite: boolean }) {
     },
     onError: (error: Error) => toast('Could not save attendance', { tone: 'danger', description: error.message }),
   });
+
+  // The API rejects PRESENT/HALF_DAY without an in-time, so block the save instead of letting
+  // the whole roster fail with a 422.
+  const missingTime = rows.some((row) => needsTime(statusOf(row)) && !inTimeOf(row));
 
   const toneFor = (status: string) =>
     status === 'PRESENT' ? 'bg-ok/12 text-ok border-ok/35'
@@ -83,10 +100,10 @@ export function AttendancePanel({ canWrite }: { canWrite: boolean }) {
         action={(
           <div className="flex items-end gap-2">
             <Field label="Date" className="mb-0 w-40">
-              <Input type="date" value={date} onChange={(e) => { setDate(e.target.value); setMarks({}); }} />
+              <Input type="date" value={date} onChange={(e) => { setDate(e.target.value); setMarks({}); setInTimes({}); setOutTimes({}); }} />
             </Field>
             {canWrite && (
-              <Button size="sm" variant="primary" loading={save.isPending} disabled={rows.length === 0} onClick={() => save.mutate()}>
+              <Button size="sm" variant="primary" loading={save.isPending} disabled={rows.length === 0 || missingTime} onClick={() => save.mutate()}>
                 Save attendance
               </Button>
             )}
@@ -105,7 +122,29 @@ export function AttendancePanel({ canWrite }: { canWrite: boolean }) {
                 <p className="text-sm font-semibold text-ink-100">{row.name}</p>
                 <p className="text-[11px] text-ink-500">{row.roleKey.replace(/_/g, ' ')} · {row.email}</p>
               </div>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {needsTime(statusOf(row)) && (
+                  <>
+                    <Input
+                      type="time"
+                      aria-label={`In time for ${row.name}`}
+                      placeholder="In HH:MM"
+                      className="w-[7.5rem]"
+                      disabled={!canWrite}
+                      value={inTimeOf(row)}
+                      onChange={(e) => setInTimes({ ...inTimes, [row.userId]: e.target.value })}
+                    />
+                    <Input
+                      type="time"
+                      aria-label={`Out time for ${row.name}`}
+                      placeholder="Out HH:MM"
+                      className="w-[7.5rem]"
+                      disabled={!canWrite}
+                      value={outTimeOf(row)}
+                      onChange={(e) => setOutTimes({ ...outTimes, [row.userId]: e.target.value })}
+                    />
+                  </>
+                )}
                 {ATTENDANCE_STATUSES.map((status) => (
                   <button
                     key={status}
@@ -124,6 +163,11 @@ export function AttendancePanel({ canWrite }: { canWrite: boolean }) {
             </div>
           ))}
         </div>
+      )}
+      {missingTime && (
+        <p className="border-t border-carbon-700/70 px-5 py-2 text-[11px] font-medium text-warn">
+          Add an in-time for every Present or Half day row before saving.
+        </p>
       )}
 
       <div className="border-t border-carbon-700/70 bg-carbon-900/40 px-5 py-4">
