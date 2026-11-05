@@ -17,9 +17,15 @@ permissions:
 #   * verify  -> petroflow_test  (suffix _test is enforced by the Java suite itself)
 #   * e2e     -> petroflow_e2e   (suffix _e2e)
 #   * the production schema name "petroflow" is never created, referenced or connected to.
-# Every job step connects with the unprivileged CI user below; no job step receives root
-# credentials. The MySQL service container needs an initial root password to start, which is
-# declared only in the service definition and never exported to a step.
+#
+# Every application step uses the schema-scoped, unprivileged account declared in `env` below.
+# The MySQL service container needs an initial root password to start; it is declared only in
+# the service definition and never exported to an application step. The single provisioning
+# step that does need administrator access receives the root password through its own step
+# `env:` block and is the only place root credentials are used.
+#
+# Keep this file free of duplicate mapping keys: a repeated key makes GitHub reject the whole
+# workflow ("Invalid workflow file"), which fails every run before a single step executes.
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -28,8 +34,8 @@ jobs:
       mysql:
         image: mysql:8.0
         env:
-          MYSQL_ROOT_PASSWORD: petroflow
-          MYSQL_DATABASE: petroflow_test
+          # Container-initialisation only; this account is never handed to an application step.
+          MYSQL_ROOT_PASSWORD: ci-local-root
         ports:
           - 3306:3306
         options: >-
@@ -39,11 +45,13 @@ jobs:
           --health-retries=15
     env:
       NODE_ENV: development
+      # What the Java API and the test suite read.
       PETROFLOW_DB_HOST: 127.0.0.1
       PETROFLOW_DB_PORT: '3306'
       PETROFLOW_DB_NAME: petroflow_test
-      PETROFLOW_DB_USER: petroflow_ci
-      PETROFLOW_DB_PASSWORD: petroflow_ci_pw
+      PETROFLOW_DB_USER: petroflow_test_app
+      PETROFLOW_DB_PASSWORD: petroflow_test_only
+      # The same values for the mysql/mysqldump command-line client.
       MYSQL_HOST: 127.0.0.1
       MYSQL_PORT: '3306'
       MYSQL_DATABASE: petroflow_test
@@ -51,12 +59,18 @@ jobs:
       MYSQL_PASSWORD: petroflow_test_only
       TEST_DB_NAME: petroflow_test
       PETROFLOW_TEST_DB_DISPOSABLE: 'true'
+      # Demo rows are explicit in development; production-like behaviour is covered by the
+      # suite's own Config.load(Map) cases, so these must stay out of the ambient environment.
+      SEED_DEMO_DATA: 'true'
+      ENABLE_DEMO_TOOLS: 'true'
+      DEMO_PASSWORD: PetroFlow@2025
+      COOKIE_SECURE: 'false'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - name: Provision disposable schemas and scoped test principal (administrator only)
+      - name: Provision disposable schema and scoped test principal (administrator only)
         env:
-          MYSQL_ROOT_PASSWORD: petroflow
+          MYSQL_ROOT_PASSWORD: ci-local-root
         run: |
           MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -h 127.0.0.1 -P 3306 -u root <<'SQL'
           CREATE DATABASE IF NOT EXISTS petroflow_test CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -80,13 +94,29 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/setup-java@v4
+      - name: Database isolation guard (test schema only, never "petroflow")
+        run: |
+          set -euo pipefail
+          if [ "$PETROFLOW_DB_NAME" = "petroflow" ]; then
+            echo "Refusing to run CI against the production schema name." >&2
+            exit 1
+          fi
+          case "$PETROFLOW_DB_NAME" in
+            *_test) ;;
+            *) echo "CI database must end in _test (got $PETROFLOW_DB_NAME)" >&2; exit 1 ;;
+          esac
+          MYSQL_PWD="$MYSQL_PASSWORD" mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" \
+            -e "SELECT DATABASE(), CURRENT_USER();" "$MYSQL_DATABASE"
+          MYSQL_PWD="$MYSQL_PASSWORD" mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" \
+            -e "SHOW DATABASES;" | grep -qx "$MYSQL_DATABASE"
+
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
           cache: gradle
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '22.13.0'
           cache: npm
@@ -111,7 +141,7 @@ jobs:
           MYSQL_PWD="$MYSQL_PASSWORD" mysqldump --single-transaction --no-tablespaces -h 127.0.0.1 -P 3306 -u "$MYSQL_USER" petroflow_test > /tmp/petroflow-test-backup.sql
           test -s /tmp/petroflow-test-backup.sql
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: frontend-dist
@@ -127,11 +157,8 @@ jobs:
       mysql:
         image: mysql:8.0
         env:
-          # Container-initialisation only; this account is never handed to a job step.
+          # Container-initialisation only; this account is never handed to an application step.
           MYSQL_ROOT_PASSWORD: ci-local-root
-          MYSQL_DATABASE: petroflow_e2e
-          MYSQL_USER: petroflow_e2e
-          MYSQL_PASSWORD: petroflow_e2e_pw
         ports:
           - 3306:3306
         options: >-
@@ -144,22 +171,24 @@ jobs:
       PETROFLOW_DB_HOST: 127.0.0.1
       PETROFLOW_DB_PORT: '3306'
       PETROFLOW_DB_NAME: petroflow_e2e
-      PETROFLOW_DB_USER: petroflow_e2e
-      PETROFLOW_DB_PASSWORD: petroflow_e2e_pw
+      PETROFLOW_DB_USER: petroflow_e2e_app
+      PETROFLOW_DB_PASSWORD: petroflow_e2e_only
       MYSQL_HOST: 127.0.0.1
       MYSQL_PORT: '3306'
       MYSQL_DATABASE: petroflow_e2e
-      MYSQL_USER: petroflow_e2e
-      MYSQL_PASSWORD: petroflow_e2e_pw
-      E2E_MYSQL_DATABASE: petroflow_e2e
       MYSQL_USER: petroflow_e2e_app
       MYSQL_PASSWORD: petroflow_e2e_only
+      E2E_MYSQL_DATABASE: petroflow_e2e
+      SEED_DEMO_DATA: 'true'
+      ENABLE_DEMO_TOOLS: 'true'
+      DEMO_PASSWORD: PetroFlow@2025
+      COOKIE_SECURE: 'false'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Provision E2E-scoped principal (administrator only)
         env:
-          MYSQL_ROOT_PASSWORD: petroflow
+          MYSQL_ROOT_PASSWORD: ci-local-root
         run: |
           MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -h 127.0.0.1 -P 3306 -u root <<'SQL'
           CREATE DATABASE IF NOT EXISTS petroflow_e2e CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -179,13 +208,13 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
           cache: gradle
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '22.13.0'
           cache: npm
@@ -203,11 +232,11 @@ jobs:
             *_e2e) ;;
             *) echo "E2E database must end in _e2e (got $MYSQL_DATABASE)" >&2; exit 1 ;;
           esac
-          mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" \
+          MYSQL_PWD="$MYSQL_PASSWORD" mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" \
             -e "SELECT DATABASE(), CURRENT_USER();" "$MYSQL_DATABASE"
           # Playwright starts the API jar with --reset-db; prove that grant exists before the run.
-          mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" \
-            -e "CREATE DATABASE IF NOT EXISTS \`$MYSQL_DATABASE\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+          MYSQL_PWD="$MYSQL_PASSWORD" mysql -h "$MYSQL_HOST" -P "$MYSQL_PORT" -u "$MYSQL_USER" \
+            -e "SHOW DATABASES;" | grep -qx "$MYSQL_DATABASE"
 
       - name: Package Java 21 API jar
         run: node scripts/gradle.mjs jar --no-daemon
@@ -218,7 +247,7 @@ jobs:
       - name: Browser workflows (React/Vite + Java 21 API + MySQL 8)
         run: npm run test:e2e
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-report

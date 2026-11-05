@@ -3003,9 +3003,49 @@ public final class BackendTests {
     // Phase 0 security remediation — A4 (production demo security) and A5 (login throttling)
     // -----------------------------------------------------------------------------------------
 
+    /**
+     * Ambient variables that would otherwise leak into {@link Config#load(Map)} from the machine
+     * running the suite. Only configuration *policy* lives here: the demo/production switches and
+     * the reverse-proxy trust settings. Database coordinates are deliberately left alone so that an
+     * operator who exports their own MySQL host/port (Compose, a pump PC, a different port) can
+     * still run the destructive integration cases against it.
+     */
+    private static final List<String> CONFIG_KEYS_UNDER_TEST = List.of(
+            "NODE_ENV",
+            "SEED_DEMO_DATA",
+            "ENABLE_DEMO_TOOLS",
+            "COOKIE_SECURE",
+            "PETROFLOW_TRUST_PROXY",
+            "PETROFLOW_TRUSTED_PROXIES",
+            "PETROFLOW_LOGIN_WINDOW_SECONDS",
+            "PETROFLOW_LOGIN_MAX_ATTEMPTS_PER_ACCOUNT",
+            "PETROFLOW_LOGIN_MAX_ATTEMPTS_PER_IP");
+
+    /**
+     * Builds a deterministic {@link Config} for assertions.
+     *
+     * <p>{@link Config#load(Map)} layers, in order: the repository {@code .env} files, the ambient
+     * process environment, and finally the caller's overrides. Only the overrides can be trusted in
+     * a test, because a developer machine, a pump PC or CI may export {@code SEED_DEMO_DATA},
+     * {@code ENABLE_DEMO_TOOLS}, {@code NODE_ENV} or {@code COOKIE_SECURE} for its own unrelated
+     * purpose — CI does exactly that, to run the API with demo data. Leaving them visible made the
+     * configuration assertions below depend on the shell they happened to run in: a case like
+     * "production rejects demo seeding" would throw before it could assert anything, and
+     * "demo seeding defaults to false in production" would flip to the ambient value.
+     *
+     * <p>So every policy variable this suite reasons about is pinned here: the ones a case sets
+     * explicitly, and {@code null}-valued entries that blank out everything else. A blank value is
+     * treated as "not set" by {@link Config}, which keeps the documented defaults testable while the
+     * real startup path (which reads the actual environment) is exercised separately by the child
+     * JVM cases at the bottom of this file.
+     */
     private static Config testConfig(String testDb, Map<String, String> extra) {
         Map<String, String> env = new LinkedHashMap<>();
+        for (String key : CONFIG_KEYS_UNDER_TEST) {
+            env.put(key, null);
+        }
         env.put("PETROFLOW_DB_NAME", testDb);
+        env.put("MYSQL_DATABASE", testDb);
         env.putAll(extra);
         return Config.load(env);
     }
