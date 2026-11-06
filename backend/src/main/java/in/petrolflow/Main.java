@@ -20,7 +20,7 @@ public final class Main {
             System.err.println("PetroFlow configuration error:");
             System.err.println(invalid.getMessage());
             System.err.println("The API did not start.");
-            System.exit(1);
+            exitOnConfigurationError();
             return;
         }
         boolean bootstrap = flags.contains("--bootstrap-owner") || flags.contains("--bootstrap");
@@ -49,7 +49,15 @@ public final class Main {
         System.out.println("PetroFlow Java API — MySQL " + config.dbUser + "@" + config.dbHost + ":" + config.dbPort + "/" + config.dbName);
         System.out.println("Environment: " + config.env + " · demo tools: " + config.demoTools
                 + " · demo seed: " + config.seedDemo + " · trusted proxy: " + config.trustProxy);
-        Db.open(config);
+        try {
+            Db.open(config);
+        } catch (ApiException unreachable) {
+            System.err.println();
+            System.err.println("PetroFlow cannot open a MySQL connection: " + unreachable.getMessage());
+            System.err.println("Target: " + config.dbUser + "@" + config.dbHost + ":" + config.dbPort + "/" + config.dbName);
+            exitOnConfigurationError();
+            return;
+        }
         try {
             DemoGuard.enforceProductionStartup(config);
         } catch (IllegalStateException blocked) {
@@ -90,6 +98,28 @@ public final class Main {
         }
         Web web = buildWeb(config);
         web.listen();
+    }
+
+    /**
+     * Explains the most common reason the API refuses to boot, then exits.
+     *
+     * <p>Between {@code npm run dev} starting the frontend and this process failing, the only
+     * symptom a user sees is "500 /api/v1/..." on every screen. A bare stack trace gives no hint
+     * that MySQL is the missing piece, so print the actionable checklist before exiting.
+     */
+    private static void exitOnConfigurationError() {
+        System.err.println();
+        System.err.println("Most likely fixes, in order:");
+        System.err.println("  1. MySQL 8 must be running on the host and port in .env (default 127.0.0.1:3306).");
+        System.err.println("     Windows: net start MySQL80      Linux: sudo systemctl start mysql");
+        System.err.println("  2. The database name in MYSQL_DATABASE / PETROFLOW_DB_NAME must be reachable");
+        System.err.println("     by MYSQL_USER; on a fresh machine use your MySQL root credentials first.");
+        System.err.println("  3. Copy .env.example to .env and adjust MYSQL_USER / MYSQL_PASSWORD.");
+        System.err.println("  4. This process needs JDK 21: run 'java -version' and 'gradlew.bat -v'.");
+        System.err.println();
+        System.err.println("The frontend alone cannot serve data; it proxies /api to this process on port "
+                + "4000 by default.");
+        System.exit(1);
     }
 
     public static Web buildWeb(Config config) {
