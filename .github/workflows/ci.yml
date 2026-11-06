@@ -261,7 +261,24 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Browser workflows (React/Vite + Java 21 API + MySQL 8)
-        run: npm run test:e2e
+        id: e2e-tests
+        # The log bundle is not reachable from every network, so keep the reporter output locally
+        # and republish the failing summary as an annotation in the step below.
+        run: |
+          set -o pipefail
+          npm run test:e2e 2>&1 | tee /tmp/e2e.log
+
+      - name: Report browser test output on failure
+        if: failure() && steps.e2e-tests.outcome == 'failure'
+        run: |
+          python3 - <<'PY'
+          import re
+          text = open('/tmp/e2e.log', errors='replace').read()
+          keep = [line for line in text.splitlines() if re.search(r'(✘|✓|›|Error:|expect\(|Received|Expected|at .*\.ts:)', line)]
+          tail = '\n'.join((keep or text.splitlines())[-40:])[-2000:]
+          escaped = tail.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          print(f"::error title=Playwright failures::{escaped}")
+          PY
 
       - uses: actions/upload-artifact@v7
         if: failure()

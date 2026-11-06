@@ -345,7 +345,9 @@ test('attendance saves a Present day only once an in-time is entered', async ({ 
   monitor.allow('POST', '/api/v1/attendance/mark', 422);
   await demoLogin(page);
   await page.goto('/employees');
-  await page.getByText('Attendance', { exact: true }).first().click();
+  // "Attendance" is the <summary> of a <details> block; click the summary itself, not any text
+  // node that happens to say the same thing elsewhere on the page.
+  await page.locator('summary', { hasText: 'Attendance' }).first().click();
 
   const panel = page.locator('.card', { hasText: 'Daily crew attendance' }).first();
   await expect(panel).toBeVisible();
