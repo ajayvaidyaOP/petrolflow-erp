@@ -402,17 +402,31 @@ test('opening stock on a fresh tank is recorded and reaches the ledger', async (
   await dialog.getByLabel('Opening stock (litres)').fill('2500.5');
   await dialog.getByRole('button', { name: 'Set opening stock' }).click();
   await expect(page.getByText('Opening stock saved')).toBeVisible();
-  await expect(page.getByText(/2,500\.5|2500\.500/).first()).toBeVisible();
+
+  // The tank card prints book stock rounded to whole litres, so verify the exact figure in the
+  // ledger: opening stock is the only movement this tank has, so it is also the closing balance.
+  await card.getByRole('button', { name: 'Ledger' }).click();
+  const ledger = page.getByRole('dialog', { name: new RegExp(`${code} .*stock ledger`) });
+  await expect(ledger).toBeVisible();
+  await expect(ledger.getByText('Opening stock', { exact: true }).first()).toBeVisible();
+  await expect(ledger.getByText('2,500.5 L').first()).toBeVisible();
+  await expect(ledger.getByText(/Closing book stock 2,500\.5 L/)).toBeVisible();
 });
 
 // A frontend without its API must say so, instead of showing a bare 500 and an empty screen.
-test('unreachable API shows an actionable message instead of a silent failure', async ({ page }) => {
+test('unreachable API shows an actionable message instead of a silent failure', async ({ page, monitor }) => {
+  // Both probes are failed on purpose here; the point of the test is what the UI says about it.
+  monitor.allow('GET', '/api/v1/auth/me', 500);
+  monitor.allow('GET', '/api/v1/auth/demo-accounts', 500);
   await page.route('**/api/v1/auth/me', (route) => route.fulfill({ status: 500, contentType: 'application/json',
     body: JSON.stringify({ error: { code: 'DB_UNAVAILABLE', message: 'MySQL is not reachable at 127.0.0.1:3306' } }) }));
   await page.route('**/api/v1/auth/demo-accounts', (route) => route.fulfill({ status: 500, contentType: 'application/json',
     body: JSON.stringify({ error: { code: 'DB_UNAVAILABLE', message: 'MySQL is not reachable at 127.0.0.1:3306' } }) }));
   await page.goto('/login');
-  await expect(page.getByRole('main').or(page.locator('main'))).toBeVisible();
-  await expect(page.getByText('Something went wrong', { exact: true })).toHaveCount(0);
+  await expect(page.locator('main')).toBeVisible();
+  // Still a usable sign-in form, not a blank screen or the generic error boundary.
   await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+  await expect(page.getByText('Something went wrong', { exact: true })).toHaveCount(0);
+  // And it says why, instead of silently refusing to sign anyone in.
+  await expect(page.getByText(/The API is not reachable right now/)).toBeVisible();
 });

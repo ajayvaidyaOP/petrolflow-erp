@@ -44,7 +44,7 @@ const PILLARS = [
 ];
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, sessionError } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
@@ -260,6 +260,16 @@ export default function Login() {
               {error && (
                 <div role="alert" className="callout-danger leading-relaxed">
                   {error}
+                </div>
+              )}
+
+              {!error && sessionError && (
+                <div role="alert" className="callout-danger leading-relaxed">
+                  The API is not reachable right now, so signing in will not work.
+                  {sessionError.status >= 500
+                    ? ' The server answered with an error, which usually means its database is down.'
+                    : ' Start the API server, then reload this page.'}{' '}
+                  If this keeps happening, ask your administrator to check the server and database.
                 </div>
               )}
 
