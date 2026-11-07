@@ -28,6 +28,32 @@ export function formatLitres(value: string | number | null | undefined) {
   return `${num.format(n)} L`;
 }
 
+/**
+ * Turns stored enum tokens into the words a forecourt operator reads: `TRANSFER_IN` -> `Transfer in`,
+ * `NON_COMMERCIAL` -> `Non commercial`. Screens should never show raw SHOUTING_SNAKE tokens.
+ */
+export function formatEnumLabel(value: string | null | undefined) {
+  if (!value) return '—';
+  const words = value.toLowerCase().replace(/_/g, ' ').trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+const MOVEMENT_LABELS: Record<string, string> = {
+  OPENING: 'Opening stock',
+  DELIVERY: 'Delivery',
+  DISPENSED: 'Dispensed',
+  TRANSFER_IN: 'Transfer in',
+  TRANSFER_OUT: 'Transfer out',
+  ADJUSTMENT: 'Adjustment',
+  RECEIVED: 'Received',
+};
+
+/** Stock ledger type as a plain phrase, e.g. `OPENING` -> `Opening stock`. */
+export function formatMovementType(value: string | null | undefined) {
+  if (!value) return '—';
+  return MOVEMENT_LABELS[value] ?? formatEnumLabel(value);
+}
+
 export function formatNumber(value: string | number | null | undefined, digits = 2) {
   if (value === null || value === undefined || value === '') return '—';
   const n = Number(value);

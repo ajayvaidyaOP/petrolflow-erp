@@ -68,7 +68,7 @@ public final class AuthRoutes {
         if (!SIGN_IN_ROLES.contains(Db.str(row, "role_key"))) {
             throw ApiException.unauthorized(LoginThrottle.GENERIC_AUTH_MESSAGE);
         }
-        if (ctx.config.production && Db.num(row, "is_demo") == 1) {
+        if (ctx.config.production && isDemoAccount(ctx.config, row)) {
             throw ApiException.unauthorized(LoginThrottle.GENERIC_AUTH_MESSAGE);
         }
         if (row.get("tenant_id") != null) {
@@ -95,6 +95,36 @@ public final class AuthRoutes {
             if (ctx.preview) body.put("previewToken", session.get("token"));
         }
         ctx.ok(body);
+    }
+
+    /**
+     * True when a production API must refuse this account.
+     *
+     * <p>The {@code is_demo} flag alone is not enough. Operators are told (README, "Production se
+     * pehle") to clear {@code is_demo} on a demo row to lift the startup guard; doing that would
+     * otherwise leave a working login behind the published demo password. So the seeded demo
+     * addresses shipped in {@code backend/db/mysql/seed.sql} are refused too, exactly as
+     * {@link DemoGuard} treats them at startup. A dealer whose real address happens to be one of
+     * those four must change the address, not just the flag.
+     */
+    private static boolean isDemoAccount(Config config, Map<String, Object> row) {
+        if (Db.num(row, "is_demo") == 1) return true;
+        String email = Db.str(row, "email");
+        if (email == null || email.isBlank()) return false;
+        String normalized = email.trim().toLowerCase(java.util.Locale.ROOT);
+        return seededDemoEmails(config).contains(normalized);
+    }
+
+    /** The demo addresses that ship with this build, read once from seed.sql (cached). */
+    private static volatile java.util.Set<String> cachedDemoEmails;
+
+    private static java.util.Set<String> seededDemoEmails(Config config) {
+        java.util.Set<String> cached = cachedDemoEmails;
+        if (cached != null) return cached;
+        java.util.Set<String> seeded = DemoGuard.seededEmails(config.mysqlDir().resolve("seed.sql"));
+        if (seeded.isEmpty()) seeded = new java.util.TreeSet<>(DemoGuard.SEEDED_DEMO_EMAILS);
+        cachedDemoEmails = seeded;
+        return seeded;
     }
 
     private static void logout(Web.Ctx ctx) {

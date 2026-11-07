@@ -240,6 +240,7 @@ PETROFLOW_API_URL=http://127.0.0.1:4000
 - `SEED_DEMO_DATA` aur `ENABLE_DEMO_TOOLS` ka default `false` hai. Inme se kisi ko bhi `true` karoge to API **start hi nahi hogi** — demo users production DB mein kabhi nahi banenge.
 - `/api/v1/auth/demo-accounts` production mein 404 deta hai, aur demo login shortcuts kaam nahi karte.
 - Agar production DB mein purane demo accounts bache hue mile (`superadmin@petroflow.dev`, `owner/manager/attendant@sunrisefuels.in`, ya `is_demo=1` wala koi bhi row) to API start hote waqt ruk jaati hai aur message deti hai. Wo accounts **khud delete ya disable nahi hote** — pehle asli dealer login banao, phir demo rows hatao ya `is_demo=0` karo, uske baad restart karo.
+- Sirf `is_demo=0` karna kaafi nahi hai: production mein in chaar demo email addresses se login hamesha 401 deta hai, chahe flag kuch bhi ho. Demo password wala login band karna hai to wo rows delete karo (ya email badlo); `is_demo` column chhedne se sirf startup guard hat-ta hai, login nahi khulta.
 
 **Nayi (khali) production database pe pehla owner kaise banao**
 

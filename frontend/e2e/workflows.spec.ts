@@ -338,3 +338,95 @@ test('overview quick actions open entry forms and nested dialogs keep keyboard f
   await expect(ledger).toBeHidden();
   expect(await page.evaluate(() => document.body.style.overflow)).not.toBe('hidden');
 });
+
+// Regression: /attendance/mark rejects PRESENT and HALF_DAY without an inTime. The panel used to
+// send the sheet's null inTime and every save failed, so the roster could not be filled in at all.
+test('attendance saves a Present day only once an in-time is entered', async ({ page, monitor }) => {
+  monitor.allow('POST', '/api/v1/attendance/mark', 422);
+  await demoLogin(page);
+  await page.goto('/employees');
+  // "Attendance" is the <summary> of a <details> block; click the summary itself, not any text
+  // node that happens to say the same thing elsewhere on the page.
+  await page.locator('summary', { hasText: 'Attendance' }).first().click();
+
+  const panel = page.locator('.card', { hasText: 'Daily crew attendance' }).first();
+  await expect(panel).toBeVisible();
+
+  // Mark the first crew member present, then save without a time: the UI must block, not 422.
+  await panel.getByRole('button', { name: 'Present', exact: true }).first().click();
+  const save = panel.getByRole('button', { name: 'Save attendance' });
+  await expect(save).toBeDisabled();
+  await expect(panel.getByText(/Add an in-time for every Present or Half day row/)).toBeVisible();
+
+  // Supplying the time enables the save and the request succeeds.
+  await panel.getByRole('textbox', { name: /^In time for / }).first().fill('07:00');
+  await expect(save).toBeEnabled();
+  await save.click();
+  await expect(page.getByText('Attendance saved')).toBeVisible();
+});
+
+// Regression: Domain.movement() selected a tenant_id column that tanks does not have, so every
+// opening stock / adjustment / transfer failed with 400 DB_ERROR.
+test('opening stock on a fresh tank is recorded and reaches the ledger', async ({ page, monitor }) => {
+  await demoLogin(page);
+  const suffix = Date.now().toString().slice(-6);
+  const code = `E2E-OS-${suffix}`;
+
+  await page.goto('/products');
+  const product = await page.evaluate(async () => {
+    const res = await fetch('/api/v1/catalog/products?pageSize=50', { credentials: 'include' });
+    const body = await res.json();
+    const list = Array.isArray(body.data) ? body.data : [];
+    return list.find((p: { category?: string }) => p.category === 'PETROL') ?? list[0] ?? null;
+  });
+  expect(product, 'a fuel product must exist to create a tank').not.toBeNull();
+
+  const created = await page.evaluate(async ({ code, productId }) => {
+    const stations = await (await fetch('/api/v1/auth/me', { credentials: 'include' })).json();
+    const stationId = stations.data?.stations?.[0]?.id;
+    const res = await fetch('/api/v1/catalog/tanks', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ stationId, code, name: `E2E opening ${code}`, productId, capacityLitres: '9000', deadStockLitres: '100' }),
+    });
+    return { status: res.status, body: await res.json() };
+  }, { code, productId: (product as { id: string }).id });
+  expect(created.status, JSON.stringify(created.body)).toBe(201);
+
+  await page.goto('/tanks');
+  const card = page.locator('.card', { hasText: code }).first();
+  await expect(card).toBeVisible();
+  await card.getByRole('button', { name: 'Opening stock' }).click();
+  const dialog = page.getByRole('dialog', { name: /Opening stock/ });
+  await dialog.getByLabel('Opening stock (litres)').fill('2500.5');
+  await dialog.getByRole('button', { name: 'Set opening stock' }).click();
+  await expect(page.getByText('Opening stock saved')).toBeVisible();
+
+  // The tank card prints book stock rounded to whole litres, so verify the exact figure in the
+  // ledger: opening stock is the only movement this tank has, so it is also the closing balance.
+  await card.getByRole('button', { name: 'Ledger' }).click();
+  const ledger = page.getByRole('dialog', { name: new RegExp(`${code} .*stock ledger`) });
+  await expect(ledger).toBeVisible();
+  await expect(ledger.getByText('Opening stock', { exact: true }).first()).toBeVisible();
+  await expect(ledger.getByText('2,500.5 L').first()).toBeVisible();
+  await expect(ledger.getByText(/Closing book stock 2,500\.5 L/)).toBeVisible();
+});
+
+// A frontend without its API must say so, instead of showing a bare 500 and an empty screen.
+test('unreachable API shows an actionable message instead of a silent failure', async ({ page, monitor }) => {
+  // Both probes are failed on purpose here; the point of the test is what the UI says about it.
+  monitor.allow('GET', '/api/v1/auth/me', 500);
+  monitor.allow('GET', '/api/v1/auth/demo-accounts', 500);
+  await page.route('**/api/v1/auth/me', (route) => route.fulfill({ status: 500, contentType: 'application/json',
+    body: JSON.stringify({ error: { code: 'DB_UNAVAILABLE', message: 'MySQL is not reachable at 127.0.0.1:3306' } }) }));
+  await page.route('**/api/v1/auth/demo-accounts', (route) => route.fulfill({ status: 500, contentType: 'application/json',
+    body: JSON.stringify({ error: { code: 'DB_UNAVAILABLE', message: 'MySQL is not reachable at 127.0.0.1:3306' } }) }));
+  await page.goto('/login');
+  await expect(page.locator('main')).toBeVisible();
+  // Still a usable sign-in form, not a blank screen or the generic error boundary.
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+  await expect(page.getByText('Something went wrong', { exact: true })).toHaveCount(0);
+  // And it says why, instead of silently refusing to sign anyone in.
+  await expect(page.getByText(/The API is not reachable right now/)).toBeVisible();
+});
