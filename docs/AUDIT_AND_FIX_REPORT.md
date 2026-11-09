@@ -1,10 +1,39 @@
 # PetroFlow ERP audit / fix report
 
-Date: 2026-11-01\
-Branch: `arena/cbc52c3a-petrolflow-erp`\
-Status: **PARTIAL — render crash fixed and verified in a real browser; owner delete/export added; client-demo data acceptance still BLOCKED on staging access**
+Date: 2026-11-06\
+Branch: `arena/c1ef1602-petrolflow-erp` (PR #26)\
+Status: **the application runs end to end** — CI `verify` + `e2e` green, 6 runtime bugs fixed, 3 regression tests added. Sections 1–9 below are the earlier audit history and remain accurate for their date.
 
-## 0. Latest pass — crash fix, owner delete & download-everywhere (verified in Chromium)
+## 0. Current pass — the app actually runs: CI green, 6 runtime bugs fixed, regressions pinned
+
+Branch: `arena/c1ef1602-petrolflow-erp` · PR #26 · Workflow run **42186297348** — `verify` ✓ (4m55s), `e2e` ✓ (2m36s)
+
+This pass answered one question — *does the app run?* — and the answer was no, for six separate
+reasons, none of which were visible from the UI. All six are fixed and every fix has a test behind it.
+
+| # | Was broken | Why it broke | Fix |
+|---|---|---|---|
+| 1 | CI could not even start | `ci.yml` had duplicate mapping keys — invalid YAML | Workflow rebuilt: `verify` + `e2e`, pinned actions, concurrency |
+| 2 | Backend tests passed locally, failed in CI | `testConfig()` read ambient `PETROFLOW_*` env vars | Explicit in-test config; production routes come from `Main.buildWeb(config)` |
+| 3 | **Every** opening stock / adjustment / transfer failed with `400 DB_ERROR` | `Domain.movement()` selected `tanks.tenant_id`, a column that does not exist | Join through `stations` for the tenant filter |
+| 4 | Attendance could never be saved for a Present day | Panel had no In/Out time inputs, so the API's intentional `inTime` requirement was unmeetable | Time inputs added; Save disabled with an explicit hint until every Present/Half-day row has one |
+| 5 | Demo logins failed once `is_demo` was 0 | `isDemoAccount` trusted the flag only | Email is also matched against the seeded demo set |
+| 6 | Silent failure instead of a diagnosable one | Startup died on the first DB error with no guidance; login screen showed nothing when the API was down | 4-step startup checklist printed before exit; sign-in screen now states that the API is unreachable and why |
+
+Also in this pass: stock-ledger types read as words (`Opening stock`) instead of `OPENING` tokens,
+and the tank-indent cell no longer mixes fill % into a "Book stock (L)" column.
+
+**Regression coverage added** (`frontend/e2e/workflows.spec.ts`, 25 tests total):
+attendance saves a Present day only once an in-time is entered · opening stock on a fresh tank is
+recorded and reaches the ledger · unreachable API shows an actionable message instead of a silent failure.
+
+**Contract check**: 164 backend routes vs 171 frontend call sites — 0 missing routes, 0 method
+mismatches. Sandbox has no JDK, no MySQL and no Docker, so CI is the verification channel; the
+backend test suite, the production HTTP stack and Chromium all run there.
+
+---
+
+## 0a. Earlier pass — crash fix, owner delete & download-everywhere (verified in Chromium)
 
 The deployed app was showing the app-wide `AppErrorBoundary` ("This screen could not be
 displayed") and **no buttons worked**. Root causes were confirmed in source and then

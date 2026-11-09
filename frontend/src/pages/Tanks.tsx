@@ -5,7 +5,7 @@ import { apiGet, apiList, apiPatch, apiPost, type ListMeta } from '../lib/api';
 import { DeleteRecordButton, ExportCsvButton } from '../components/OwnerActions';
 import { useIdempotencyTracker } from '../lib/idempotency';
 import { useAuth, useStations } from '../lib/auth';
-import { formatDateTime, formatINR, formatLitres, formatNumber } from '../lib/format';
+import { formatDateTime, formatINR, formatLitres, formatMovementType, formatNumber } from '../lib/format';
 import {
   Badge,
   TableScrollHint,
@@ -399,7 +399,7 @@ export default function Tanks() {
                           <td className="text-xs text-ink-400">{formatDateTime(movement.occurredAt)}</td>
                           <td className="text-ink-200">{movement.tankCode}</td>
                           <td className="text-xs text-ink-400">{movement.productName}</td>
-                          <td><Badge tone={movement.type === 'DISPENSED' ? 'accent' : movement.type === 'DELIVERY' ? 'success' : 'neutral'}>{movement.type}</Badge></td>
+                          <td><Badge tone={movement.type === 'DISPENSED' ? 'accent' : movement.type === 'DELIVERY' ? 'success' : 'neutral'}>{formatMovementType(movement.type)}</Badge></td>
                           <td className={`num text-right ${signed ? 'text-ok' : 'text-warn'}`}>{signed ? '+' : '−'}{formatNumber(absQty, 3)} L</td>
                           <td className="max-w-[320px] text-[11px] text-ink-500">{movement.note ?? '—'}</td>
                         </tr>
@@ -462,7 +462,7 @@ export default function Tanks() {
                 {ledger.data.ledger.map((row) => (
                   <tr key={row.id}>
                     <td className="text-xs text-ink-400">{formatDateTime(row.occurredAt)}</td>
-                    <td><Badge tone={Number(row.signedLitres) >= 0 ? 'success' : 'warning'}>{row.type}</Badge></td>
+                    <td><Badge tone={Number(row.signedLitres) >= 0 ? 'success' : 'warning'}>{formatMovementType(row.type)}</Badge></td>
                     <td className={`num text-right ${Number(row.signedLitres) >= 0 ? 'text-ok' : 'text-warn'}`}>{formatNumber(row.signedLitres, 3)} L</td>
                     <td className="num text-right">{formatNumber(row.runningLitres, 3)} L</td>
                     <td className="max-w-[280px] text-[11px] text-ink-500">{row.note ?? '—'}</td>
@@ -611,7 +611,7 @@ function IndentCard({ stationId }: { stationId: string }) {
                 <tr key={row.tankId}>
                   <td className="font-semibold text-ink-100">{row.tankCode}</td>
                   <td className="text-xs">{row.productName}</td>
-                  <td className="num text-right">{formatNumber(row.bookStockLitres, 0)}<span className="block text-[10px] text-ink-500">{formatNumber(row.fillPct, 0)}% full · ullage {formatNumber(row.ullageLitres, 0)} L</span></td>
+                  <td className="num text-right">{formatNumber(row.bookStockLitres, 0)}<span className="block text-[10px] text-ink-500">{formatNumber(row.fillPct, 0)}% full · {formatNumber(row.ullageLitres, 0)} L ullage</span></td>
                   <td className="num text-right">{formatNumber(row.avgDailySalesLitres, 0)}</td>
                   <td className={`num text-right ${days !== null && days < 2 ? 'font-bold text-danger' : days !== null && days < 4 ? 'font-semibold text-warn' : 'text-ink-300'}`}>
                     {days === null ? '—' : `${formatNumber(days, 1)} days`}

@@ -44,6 +44,12 @@ interface AuthContextValue {
   me: Me | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  /**
+   * Why the /auth/me probe failed, when it did. A 401 just means "not signed in"; anything else
+   * (network error, 5xx) means the API or its database is unreachable, which the login screen has
+   * to say out loud instead of showing an empty form that silently refuses to sign in.
+   */
+  sessionError: ApiError | null;
   login: (email: string, password: string) => Promise<Me>;
   logout: () => Promise<void>;
   can: (permission: string) => boolean;
@@ -106,16 +112,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AuthContextValue>(() => {
     const me = meQuery.data ?? null;
+    const sessionError = meQuery.error instanceof ApiError && meQuery.error.status !== 401
+      ? meQuery.error
+      : null;
     return {
       me,
       isLoading: meQuery.isLoading,
       isAuthenticated: Boolean(me),
+      sessionError,
       login,
       logout,
       can: (permission: string) => Boolean(me?.permissions.includes(permission) || me?.isSuperAdmin),
       refresh: () => void queryClient.invalidateQueries({ queryKey: ['me'] }),
     };
-  }, [meQuery.data, meQuery.isLoading, login, logout, queryClient]);
+  }, [meQuery.data, meQuery.isLoading, meQuery.error, login, logout, queryClient]);
 
   return (
     <AuthContext.Provider value={value}>

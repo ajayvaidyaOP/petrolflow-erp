@@ -433,8 +433,11 @@ public final class BackendTests {
 
         HttpResponse<String> openOk = post(client, url + "/inventory/opening-stock", ownerToken,
                 Web.map("tankId", emptyTankId, "litres", "2500.5"));
+        // Carry the real status and body into the failure message: a bare assertion label cannot
+        // distinguish a rejected contract change from a stock-calculation regression.
         check(openOk.statusCode() == 201 && "2500.500".equals(dataMap(openOk).get("bookStockLitres")),
-                "Step 1: Opening stock accepts {tankId, litres} and records 2500.500 L");
+                "Step 1: Opening stock accepts {tankId, litres} and records 2500.500 L [status="
+                        + openOk.statusCode() + " body=" + openOk.body() + "]");
         check(post(client, url + "/inventory/opening-stock", ownerToken,
                 Web.map("tankId", emptyTankId, "litres", "500")).statusCode() == 409,
                 "Step 1: Repeated opening stock on same tank rejected (409)");
@@ -1024,12 +1027,20 @@ public final class BackendTests {
 
         // Mark September 2026 attendance on stn1: 2 PRESENT, 1 HALF_DAY, 1 WEEK_OFF, 1 lowercase 'leave', 1 ABSENT
         // Expected payableDays = 2 + 0.5 + 1 = 3.5; leave = 1.0
-        post(client, url + "/attendance/mark", ownerToken, Web.map("stationId", stn1, "date", "2026-09-01",
-                "entries", List.of(Web.map("userId", staffId, "status", "PRESENT"))));
-        post(client, url + "/attendance/mark", ownerToken, Web.map("stationId", stn1, "date", "2026-09-02",
-                "entries", List.of(Web.map("userId", staffId, "status", "PRESENT"))));
-        post(client, url + "/attendance/mark", ownerToken, Web.map("stationId", stn1, "date", "2026-09-03",
-                "entries", List.of(Web.map("userId", staffId, "status", "HALF_DAY"))));
+        // PRESENT/HALF_DAY require an inTime (audit 4.8), so the roster sheet sends one; every mark
+        // is asserted so a rejected status cannot silently shift the payable-day totals below.
+        check(post(client, url + "/attendance/mark", ownerToken, Web.map("stationId", stn1, "date", "2026-09-01",
+                        "entries", List.of(Web.map("userId", staffId, "status", "PRESENT", "inTime", "07:00")))).statusCode() == 200,
+                "Step 8: PRESENT attendance with inTime is accepted");
+        check(post(client, url + "/attendance/mark", ownerToken, Web.map("stationId", stn1, "date", "2026-09-02",
+                        "entries", List.of(Web.map("userId", staffId, "status", "PRESENT", "inTime", "07:00", "outTime", "15:00")))).statusCode() == 200,
+                "Step 8: PRESENT attendance with in/out time is accepted");
+        check(post(client, url + "/attendance/mark", ownerToken, Web.map("stationId", stn1, "date", "2026-09-03",
+                        "entries", List.of(Web.map("userId", staffId, "status", "HALF_DAY", "inTime", "07:00")))).statusCode() == 200,
+                "Step 8: HALF_DAY attendance with inTime is accepted");
+        check(post(client, url + "/attendance/mark", ownerToken, Web.map("stationId", stn1, "date", "2026-09-07",
+                        "entries", List.of(Web.map("userId", staffId, "status", "PRESENT")))).statusCode() == 422,
+                "Step 8: PRESENT attendance without inTime is rejected (422)");
         post(client, url + "/attendance/mark", ownerToken, Web.map("stationId", stn1, "date", "2026-09-04",
                 "entries", List.of(Web.map("userId", staffId, "status", "WEEK_OFF"))));
         post(client, url + "/attendance/mark", ownerToken, Web.map("stationId", stn1, "date", "2026-09-05",
@@ -3003,9 +3014,49 @@ public final class BackendTests {
     // Phase 0 security remediation — A4 (production demo security) and A5 (login throttling)
     // -----------------------------------------------------------------------------------------
 
+    /**
+     * Ambient variables that would otherwise leak into {@link Config#load(Map)} from the machine
+     * running the suite. Only configuration *policy* lives here: the demo/production switches and
+     * the reverse-proxy trust settings. Database coordinates are deliberately left alone so that an
+     * operator who exports their own MySQL host/port (Compose, a pump PC, a different port) can
+     * still run the destructive integration cases against it.
+     */
+    private static final List<String> CONFIG_KEYS_UNDER_TEST = List.of(
+            "NODE_ENV",
+            "SEED_DEMO_DATA",
+            "ENABLE_DEMO_TOOLS",
+            "COOKIE_SECURE",
+            "PETROFLOW_TRUST_PROXY",
+            "PETROFLOW_TRUSTED_PROXIES",
+            "PETROFLOW_LOGIN_WINDOW_SECONDS",
+            "PETROFLOW_LOGIN_MAX_ATTEMPTS_PER_ACCOUNT",
+            "PETROFLOW_LOGIN_MAX_ATTEMPTS_PER_IP");
+
+    /**
+     * Builds a deterministic {@link Config} for assertions.
+     *
+     * <p>{@link Config#load(Map)} layers, in order: the repository {@code .env} files, the ambient
+     * process environment, and finally the caller's overrides. Only the overrides can be trusted in
+     * a test, because a developer machine, a pump PC or CI may export {@code SEED_DEMO_DATA},
+     * {@code ENABLE_DEMO_TOOLS}, {@code NODE_ENV} or {@code COOKIE_SECURE} for its own unrelated
+     * purpose — CI does exactly that, to run the API with demo data. Leaving them visible made the
+     * configuration assertions below depend on the shell they happened to run in: a case like
+     * "production rejects demo seeding" would throw before it could assert anything, and
+     * "demo seeding defaults to false in production" would flip to the ambient value.
+     *
+     * <p>So every policy variable this suite reasons about is pinned here: the ones a case sets
+     * explicitly, and {@code null}-valued entries that blank out everything else. A blank value is
+     * treated as "not set" by {@link Config}, which keeps the documented defaults testable while the
+     * real startup path (which reads the actual environment) is exercised separately by the child
+     * JVM cases at the bottom of this file.
+     */
     private static Config testConfig(String testDb, Map<String, String> extra) {
         Map<String, String> env = new LinkedHashMap<>();
+        for (String key : CONFIG_KEYS_UNDER_TEST) {
+            env.put(key, null);
+        }
         env.put("PETROFLOW_DB_NAME", testDb);
+        env.put("MYSQL_DATABASE", testDb);
         env.putAll(extra);
         return Config.load(env);
     }
@@ -3476,6 +3527,9 @@ public final class BackendTests {
         Main.resetDatabase(base);
         Main.apply(base.mysqlDir().resolve("schema.sql"));
         Main.seedIfEmpty(base);
+        // Earlier steps may have throttled this address or account; this verifier exercises the
+        // throttle deliberately, so it starts from an empty counter table.
+        Db.exec("DELETE FROM login_throttle_attempts");
 
         // A normal sign-in still works while under the limit.
         HttpResponse<String> ok = post(client, loginUrl, null, Map.of("email", email, "password", base.demoPassword));
@@ -3591,8 +3645,15 @@ public final class BackendTests {
 
         // A4: a production-configured API serves no demo shortcuts and refuses demo logins, while a
         // real (non-demo) account still signs in normally.
+        //
+        // The throttle table is shared MySQL state and the runs above deliberately exhaust the
+        // limits (60 failed sign-ins from one address). Clear it, then use a fresh client address:
+        // otherwise these requests are rejected with 429 before the production rule is reached.
+        Db.exec("DELETE FROM login_throttle_attempts");
         int productionPort = 4294;
-        Web productionWeb = new Web(testConfig(testDb, Map.of(
+        // Build the API the way Main does. A bare `new Web(config)` has no routes registered, so the
+        // assertions below would see "No route for POST /api/v1/auth/login" instead of the guard.
+        Web productionWeb = Main.buildWeb(testConfig(testDb, Map.of(
                 "NODE_ENV", "production",
                 "PORT", String.valueOf(productionPort))));
         productionWeb.listen();
@@ -3606,7 +3667,8 @@ public final class BackendTests {
 
             HttpResponse<String> demoLogin = post(client, productionUrl + "/auth/login", null,
                     Map.of("email", email, "password", base.demoPassword));
-            check(demoLogin.statusCode() == 401, "A4: a demo account cannot sign in to a production API");
+            check(demoLogin.statusCode() == 401, "A4: a demo account cannot sign in to a production API (got "
+                    + demoLogin.statusCode() + " " + demoLogin.body() + ")");
             check(!demoLogin.body().toLowerCase(java.util.Locale.ROOT).contains("demo"),
                     "A4: the demo-login refusal does not disclose that the account is a demo account");
 
@@ -3618,7 +3680,8 @@ public final class BackendTests {
                     """, tempUserId, Passwords.hash("Temp-Real-Deal-2026"), now, now);
             HttpResponse<String> realLogin = post(client, productionUrl + "/auth/login", null,
                     Map.of("email", "dealer.real@example.in", "password", "Temp-Real-Deal-2026"));
-            check(realLogin.statusCode() == 200, "A4: a real non-demo account still signs in on a production API");
+            check(realLogin.statusCode() == 200, "A4: a real non-demo account still signs in on a production API (got "
+                    + realLogin.statusCode() + " " + realLogin.body() + ")");
             check(!realLogin.body().contains("sessionToken"),
                     "A4: production login responses never return the session token in the body");
 
@@ -3878,8 +3941,33 @@ public final class BackendTests {
     }
 
     private static void check(boolean condition, String label) {
-        if (!condition) throw new AssertionError("FAILED: " + label);
+        if (!condition) {
+            // Report the exact call site and a GitHub Actions error annotation as well as throwing.
+            // The runner's log bundle is not always reachable (restricted networks, expired signed
+            // URLs), and a bare "exit code 1" with a stale-looking label is not enough to debug a
+            // red build.
+            String origin = callSite();
+            System.out.println("::error title=Backend assertion failed::"
+                    + escapeAnnotation(label + " — " + origin));
+            System.out.flush();
+            throw new AssertionError("FAILED: " + label + " — " + origin);
+        }
         passed++;
         System.out.println("  [OK] " + label);
+    }
+
+    /** "method:line" of the assertion's caller, so a failure names the exact test step. */
+    private static String callSite() {
+        return StackWalker.getInstance().walk(frames -> frames
+                .filter(frame -> BackendTests.class.getName().equals(frame.getClassName()))
+                .skip(2) // check(), callSite()
+                .map(frame -> frame.getMethodName() + ":" + frame.getLineNumber())
+                .findFirst()
+                .orElse("unknown"));
+    }
+
+    /** Escapes the characters that GitHub Actions workflow commands treat specially. */
+    private static String escapeAnnotation(String value) {
+        return value.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A");
     }
 }
