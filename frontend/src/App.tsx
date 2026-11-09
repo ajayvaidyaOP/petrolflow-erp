@@ -82,11 +82,13 @@ const pages = [
   ['audit', Audit, 'audit.read'], ['billing', Billing, 'billing.read'], ['settings', Settings, 'settings.read'],
   ['loyalty', lazy(() => import('./pages/Loyalty')), 'loyalty.read'],
   ['vehicle-history', lazy(() => import('./pages/VehicleHistory')), 'vehicle-history.read'],
+  ['pump-tablet', lazy(() => import('./pages/PumpTabletUI')), 'pump-tablet.read'],
 ] as const;
 
 function TenantHome() {
   const { can } = useAuth();
   if (can('reports.read')) return <Dashboard />;
+  if (can('pump-tablet.read')) return <Navigate to="/pump-tablet" replace />;
   if (can('vehicle-history.read')) return <Navigate to="/vehicle-history" replace />;
   if (can('loyalty.read')) return <Navigate to="/loyalty" replace />;
   if (can('shifts.read')) return <Navigate to="/shifts" replace />;
