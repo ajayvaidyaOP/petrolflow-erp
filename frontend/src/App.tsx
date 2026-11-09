@@ -80,11 +80,15 @@ const pages = [
   ['stations', Stations, 'stations.read'], ['products', Products, 'products.read'],
   ['dispensers', Dispensers, 'dispensers.read'], ['employees', Employees, 'employees.read'],
   ['audit', Audit, 'audit.read'], ['billing', Billing, 'billing.read'], ['settings', Settings, 'settings.read'],
+  ['loyalty', lazy(() => import('./pages/Loyalty')), 'loyalty.read'],
+  ['vehicle-history', lazy(() => import('./pages/VehicleHistory')), 'vehicle-history.read'],
 ] as const;
 
 function TenantHome() {
   const { can } = useAuth();
   if (can('reports.read')) return <Dashboard />;
+  if (can('vehicle-history.read')) return <Navigate to="/vehicle-history" replace />;
+  if (can('loyalty.read')) return <Navigate to="/loyalty" replace />;
   if (can('shifts.read')) return <Navigate to="/shifts" replace />;
   if (can('readings.read')) return <Navigate to="/readings" replace />;
   return <EmptyState title="No permitted screens" description="Ask your organization owner to grant access." />;
