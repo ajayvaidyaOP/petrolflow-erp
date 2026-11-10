@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardHeader, CardContent } from '../components/ui/card';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../components/ui/table';
 import { Badge } from '../components/ui/badge';
-import { formatCurrency, formatDate } from '../lib/format';
+import { formatINR, formatLitres, formatDate } from '../lib/format';
 import { apiGet } from '../lib/api';
 import { useAuth } from '../lib/auth';
 

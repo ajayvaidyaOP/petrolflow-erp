@@ -6,7 +6,7 @@ import { Badge } from '../components/ui/badge';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../components/ui/table';
 import { useAuth } from '../lib/auth';
 import { apiGet, apiPost } from '../lib/api';
-import { formatCurrency, formatDate } from '../lib/format';
+import { formatINR, formatLitres, formatDate } from '../lib/format';
 import { ChevronLeft, ChevronRight, Fuel, Truck, Calendar, AlertTriangle } from 'lucide-react';
 
 // Senior Dev: Mobile-First Pump Tablet UI (Petrol Pump CRM)
