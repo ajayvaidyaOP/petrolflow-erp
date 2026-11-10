@@ -7,13 +7,16 @@ const frontendRoot = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(frontendRoot, '..');
 
 export default defineConfig(({ mode }) => {
-  // Read root .env for the server-side proxy only. The browser API client uses
+  // Read .env for the server-side proxy only. The browser API client uses
   // relative /api URLs, and Vite exposes no non-VITE_ variables to the bundle.
+  // Same two files, same order as the Java API (Config.load): root .env, then backend/.env.
   const rootEnv = loadEnv(mode, repositoryRoot, '');
+  const backendEnv = loadEnv(mode, path.resolve(repositoryRoot, 'backend'), '');
   const apiProxyTarget =
-    process.env.PETROFLOW_API_URL || rootEnv.PETROFLOW_API_URL || 'http://127.0.0.1:4000';
+    process.env.PETROFLOW_API_URL || rootEnv.PETROFLOW_API_URL || backendEnv.PETROFLOW_API_URL
+    || 'http://127.0.0.1:4000';
   const hmrClientPort = process.env.PETROFLOW_HMR_CLIENT_PORT || rootEnv.PETROFLOW_HMR_CLIENT_PORT
-    || (process.env.E2B_SANDBOX ? '443' : '');
+    || backendEnv.PETROFLOW_HMR_CLIENT_PORT || (process.env.E2B_SANDBOX ? '443' : '');
 
   return {
     root: frontendRoot,

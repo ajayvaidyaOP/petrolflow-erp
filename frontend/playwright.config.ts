@@ -8,7 +8,7 @@ const origin = `http://127.0.0.1:${webPort}`;
 const browserExecutable = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
 
 export default defineConfig({
-  testDir: './frontend/e2e',
+  testDir: './e2e',
   timeout: 90_000,
   expect: { timeout: 10_000 },
   workers: 1,
@@ -26,7 +26,7 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: 'node scripts/start-e2e-api.mjs',
+      command: 'node e2e/start-e2e-api.mjs',
       url: `http://127.0.0.1:${apiPort}/api/v1/health`,
       timeout: 120_000,
       reuseExistingServer: false,
@@ -47,7 +47,7 @@ export default defineConfig({
       },
     },
     {
-      command: `npm run dev -w @petroflow/web -- --port ${webPort} --strictPort`,
+      command: `npm run dev -- --port ${webPort} --strictPort`,
       url: origin,
       timeout: 90_000,
       reuseExistingServer: false,

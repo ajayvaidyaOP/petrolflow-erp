@@ -12,7 +12,7 @@ const origin = `http://127.0.0.1:${webPort}`;
 const browserExecutable = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
 
 export default defineConfig({
-  testDir: './frontend/e2e',
+  testDir: './e2e',
   testMatch: /crash-resilience\.spec\.ts/,
   timeout: 60_000,
   expect: { timeout: 10_000 },
@@ -29,7 +29,7 @@ export default defineConfig({
     },
   },
   webServer: {
-    command: `npm run dev -w @petroflow/web -- --port ${webPort} --strictPort`,
+    command: `npm run dev -- --port ${webPort} --strictPort`,
     url: origin,
     timeout: 90_000,
     reuseExistingServer: false,
