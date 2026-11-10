@@ -6,10 +6,7 @@ import { Input } from '../components/ui/input';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../components/ui/table';
 import { useAuth } from '../lib/auth';
 import { apiGet, apiPost } from '../lib/api';
-import { formatCurrency, formatDate } from '../lib/format';
-
-import { apiGet } from '../lib/api';
-import { formatCurrency, formatDate } from '../lib/format';
+import { formatINR, formatLitres, formatDate } from '../lib/format';
 
 // Senior Dev: Added 'loyalty.read' permission check in App.tsx
 // Mock data structure for Senior Dev demo (will connect to API later)

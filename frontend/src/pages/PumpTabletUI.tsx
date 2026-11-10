@@ -6,12 +6,13 @@ import { Badge } from '../components/ui/badge';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../components/ui/table';
 import { useAuth } from '../lib/auth';
 import { apiGet, apiPost } from '../lib/api';
-import { formatCurrency, formatDate } from '../lib/format';
+import { formatINR, formatLitres, formatDate } from '../lib/format';
 import { ChevronLeft, ChevronRight, Fuel, Truck, Calendar, AlertTriangle } from 'lucide-react';
 
 // Senior Dev: Mobile-First Pump Tablet UI (Petrol Pump CRM)
 // Optimized for 7-10 inch tablets used by pump attendants.
 // Large touch targets, high contrast, offline-ready indicators.
+// Responsive: Mobile (stacked), Tablet (2 col), Desktop (3 col)
 
 interface TabletShift {
   id: string;
