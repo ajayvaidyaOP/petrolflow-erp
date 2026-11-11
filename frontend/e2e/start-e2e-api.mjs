@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const jarPath = resolve(root, 'backend', 'build', 'libs', 'petroflow-1.0.0.jar');
 
 if (!existsSync(jarPath)) {

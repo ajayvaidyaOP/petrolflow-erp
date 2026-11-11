@@ -30,6 +30,7 @@ public final class BackendTests {
         testPasswordsAndPermissions();
         testMysqlConnectionInitializationWithoutDatabaseCreation();
         testFinanceRules();
+        testPublicPlanShape();
         if (!Boolean.parseBoolean(System.getenv().getOrDefault("SKIP_DB_TESTS", "false"))) {
             testHttpAndDatabaseIntegration();
         }
@@ -122,6 +123,49 @@ public final class BackendTests {
         Domain.DensityEvaluation density = Domain.evaluateDensityAt15c("DIESEL", "835.0", "15.0");
         check(density.specificationUsed().contains("Uncertified") && density.specificationUsed().contains("not statutory compliance"),
                 "density label does not claim ASTM/IS compliance");
+    }
+
+    private static void testPublicPlanShape() {
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("id", "pln_internal");
+        row.put("code", "STARTER");
+        row.put("name", "Starter");
+        row.put("description", "Single outlet");
+        row.put("monthly_price", "2999.00");
+        row.put("annual_price", "32389.00");
+        row.put("max_stations", 1L);
+        row.put("max_users", 15L);
+        row.put("max_dispensers", 4L);
+        row.put("trial_days", 14L);
+        row.put("features", "[\"1 station\",\"  DSR reports \",\"\",42,null]");
+        row.put("is_active", 1L);
+        row.put("subscribers", 7L);
+        row.put("created_at", "2026-10-29T15:33:38.315Z");
+        row.put("updated_at", "2026-10-29T15:33:38.315Z");
+
+        Map<String, Object> plan = OpsApi.publicPlan(row);
+        check(List.copyOf(plan.keySet()).equals(List.of("code", "name", "description", "monthlyPrice", "annualPrice",
+                        "maxStations", "maxUsers", "maxDispensers", "trialDays", "features")),
+                "Public plan exposes only the published fields");
+        String wire = Json.stringify(plan);
+        check(!wire.contains("pln_internal") && !wire.contains("subscribers") && !wire.contains("2026-10-29"),
+                "Public plan never carries the plan id, subscriber count or timestamps");
+        check("2999.00".equals(plan.get("monthlyPrice")) && "32389.00".equals(plan.get("annualPrice")),
+                "Public plan passes stored prices through unchanged");
+        check(Long.valueOf(1).equals(plan.get("maxStations")) && Long.valueOf(15).equals(plan.get("maxUsers"))
+                        && Long.valueOf(4).equals(plan.get("maxDispensers")) && Long.valueOf(14).equals(plan.get("trialDays")),
+                "Public plan keeps the plan limits as numbers");
+        check(List.of("1 station", "DSR reports").equals(plan.get("features")),
+                "Public plan features keep only non-blank text items");
+
+        row.put("description", "   ");
+        for (String broken : new String[] {"not json", "{\"a\":1}", "", null}) {
+            row.put("features", broken);
+            Map<String, Object> tolerant = OpsApi.publicPlan(row);
+            check(tolerant.get("features") instanceof List<?> none && none.isEmpty(),
+                    "Public plan tolerates a feature list stored as: " + broken);
+            check(tolerant.get("description") == null, "Public plan reports a blank description as absent");
+        }
     }
 
     private static void expectValidation(Runnable action, String label) {

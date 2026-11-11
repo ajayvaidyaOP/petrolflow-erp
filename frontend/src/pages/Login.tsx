@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   Activity,
   ArrowRight,
+  BadgeIndianRupee,
   CheckCircle2,
   Database,
   Eye,
@@ -22,6 +23,7 @@ import {
 import { apiGet } from '../lib/api';
 import { cn } from '../lib/utils';
 import { useAuth } from '../lib/auth';
+import { formatPaise, lowestMonthlyPaise, usePublicPlans } from '../lib/plans';
 import { useTheme } from '../lib/theme';
 import { Button, Input } from '../components/ui';
 
@@ -59,6 +61,9 @@ export default function Login() {
     retry: false,
     staleTime: Infinity,
   });
+  // The price list is optional here: until it loads, or when no plan is published, the link is simply absent.
+  const plans = usePublicPlans();
+  const lowestPrice = lowestMonthlyPaise(plans.data ?? []);
   const busy = loading || signingInAs !== null;
 
   const signIn = async (user: string, pass: string) => {
@@ -287,6 +292,24 @@ export default function Login() {
               </p>
             )}
           </div>
+
+          {plans.data && plans.data.length > 0 && (
+            <Link
+              to="/pricing"
+              className="card card-hover group mt-4 flex items-center gap-3 px-5 py-3.5 sm:px-6"
+            >
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-accent/20 bg-accent/10 text-accent transition group-hover:bg-accent group-hover:text-onaccent">
+                <BadgeIndianRupee className="h-4 w-4" aria-hidden />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-display text-[13px] font-bold text-ink-100">Plans &amp; pricing</span>
+                <span className="mt-0.5 block text-[11px] text-ink-500">
+                  {lowestPrice !== null ? `From ${formatPaise(lowestPrice)} a month` : 'See what each plan includes'}
+                </span>
+              </span>
+              <ArrowRight className="h-4 w-4 shrink-0 text-ink-500 transition group-hover:translate-x-0.5 group-hover:text-accent" aria-hidden />
+            </Link>
+          )}
 
           {demo.data && demo.data.accounts.length > 0 && (
             <section className="card mt-4 p-5 sm:px-6" aria-label="Demo accounts">

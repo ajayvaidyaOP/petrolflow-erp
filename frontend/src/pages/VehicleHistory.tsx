@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardHeader, CardContent } from '../components/ui/card';
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from '../components/ui/table';
-import { Badge } from '../components/ui/badge';
+import { Badge, Card, CardBody, CardHeader, DemoNotice, LoadingBlock, PageHeader } from '../components/ui';
 import { formatINR, formatLitres, formatDate } from '../lib/format';
 import { apiGet } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { cn } from '../lib/utils';
 
 // Senior Dev: Vehicle History Dashboard (Petrol Pump CRM)
 // Tracks 12-month sales, average mileage, and fuel points per vehicle.
-// Responsive: Mobile (1 col), Tablet (2 col), Desktop (3 col)
+// Responsive: one column until the list fits beside the details; the summary tiles wrap on their own.
 
 interface VehicleHistory {
   vehicleNumber: string;
@@ -27,6 +26,18 @@ interface MonthlySalesData {
   sales: number;
 }
 
+function Metric({ label, value, valueClassName }: { label: string; value: React.ReactNode; valueClassName?: string }) {
+  return (
+    // Wide enough for a full rupee amount; narrower cards simply wrap the tiles onto more rows.
+    <div className="min-w-0 flex-1 basis-48 rounded-xl border border-carbon-700/75 bg-carbon-900/55 p-3.5 sm:p-4">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-500">{label}</p>
+      <p className={cn('num mt-1 font-display text-xl font-extrabold tracking-tight text-ink-100', valueClassName)}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
 export default function VehicleHistoryDashboard() {
   const { me } = useAuth();
   const [history, setHistory] = useState<VehicleHistory[]>([]);
@@ -36,7 +47,7 @@ export default function VehicleHistoryDashboard() {
   // Senior Dev: API integration (mocked for now, will use apiGet('/crm/vehicle-history'))
   useEffect(() => {
     // Simulate API call for last 12 months data
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       setHistory([
         {
           vehicleNumber: 'MH-12-AB-1234',
@@ -71,6 +82,7 @@ export default function VehicleHistoryDashboard() {
       ]);
       setLoading(false);
     }, 500);
+    return () => clearTimeout(timer);
   }, []);
 
   const handleSelectVehicle = (v: VehicleHistory) => {
@@ -79,109 +91,133 @@ export default function VehicleHistoryDashboard() {
 
   // Senior Dev: Helper to render monthly bar chart (simple CSS bars for now)
   const renderMonthlyChart = (monthlySales: Record<string, number>) => {
-    const max = Math.max(...Object.values(monthlySales));
+    const months = Object.entries(monthlySales);
+    const max = Math.max(0, ...months.map(([, litres]) => litres)) || 1;
     return (
-      <div className="grid grid-cols-13 gap-1 mt-4">
-        {Object.entries(monthlySales).map(([month, litres]) => (
-          <div key={month} className="flex flex-col items-center">
-            <div 
-              className="w-full bg-orange-500 rounded-t transition-all duration-500" 
-              style={{ height: `${(litres / max) * 100}%`, minHeight: '4px' }}
-              title={`${litres} L in ${month}`}
-            />
-            <span className="text-[10px] mt-1 text-muted-foreground">{month.split('-')[1]}</span>
+      <div
+        role="img"
+        aria-label={`Litres per month: ${months.map(([month, litres]) => `${month} ${litres} L`).join(', ')}`}
+        className="mt-4 grid gap-1 sm:gap-1.5"
+        style={{ gridTemplateColumns: `repeat(${months.length}, minmax(0, 1fr))` }}
+      >
+        {months.map(([month, litres]) => (
+          <div key={month} className="flex min-w-0 flex-col items-center">
+            {/* Fixed-height track: the bar's percentage height needs a definite height to resolve against. */}
+            <div className="relative h-36 w-full">
+              <div
+                className="absolute inset-x-0 bottom-0 rounded-t bg-accent transition-all duration-500"
+                style={{ height: `${(litres / max) * 100}%`, minHeight: '4px' }}
+                title={`${litres} L in ${month}`}
+              />
+            </div>
+            <span className="mt-1 text-[10px] text-ink-500">{month.split('-')[1]}</span>
           </div>
         ))}
       </div>
     );
   };
 
-  if (loading) return <div>Loading Vehicle History Dashboard...</div>;
+  if (loading) return <LoadingBlock label="Loading Vehicle History Dashboard..." rows={4} />;
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Vehicle History & CRM Dashboard</h1>
-        <Badge variant="secondary">Total Vehicles Tracked: {history.length}</Badge>
-      </div>
+    <div>
+      <PageHeader
+        title="Vehicle History & CRM Dashboard"
+        actions={<Badge>Total Vehicles Tracked: {history.length}</Badge>}
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <DemoNotice>
+        SAMPLE DATA — this screen is a prototype. The vehicles, litres and sales figures are fixed examples built into
+        the page; nothing here is read from the backend yet.
+      </DemoNotice>
+
+      {/* One column until there is room for the list beside the details (the sidebar takes ~250px from md up). */}
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,360px)_minmax(0,1fr)]">
         {/* Vehicle List */}
-        <Card className="md:col-span-1">
-          <CardHeader>
-            <h2 className="text-lg font-semibold">Vehicles</h2>
-          </CardHeader>
-          <CardContent className="max-h-[600px] overflow-y-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Vehicle</TableHead>
-                  <TableHead>Litres</TableHead>
-                  <TableHead>Mileage</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {history.map((v) => (
-                  <TableRow key={v.vehicleNumber} className="cursor-pointer hover:bg-muted" onClick={() => handleSelectVehicle(v)}>
-                    <TableCell>{v.vehicleNumber}</TableCell>
-                    <TableCell>{v.totalLitres} L</TableCell>
-                    <TableCell>{v.avgMileage} km/L</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
+        <Card className="overflow-hidden">
+          <CardHeader title="Vehicles" />
+          <div className="max-h-[600px] overflow-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Vehicle</th>
+                  <th>Litres</th>
+                  <th>Mileage</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((v) => {
+                  const selected = selectedVehicle?.vehicleNumber === v.vehicleNumber;
+                  return (
+                    <tr
+                      key={v.vehicleNumber}
+                      className={cn('cursor-pointer', selected && '!bg-accent/10')}
+                      onClick={() => handleSelectVehicle(v)}
+                    >
+                      <td className="whitespace-nowrap">
+                        {/* A real button keeps the row selectable from the keyboard; its click bubbles up to the row. */}
+                        <button
+                          type="button"
+                          aria-pressed={selected}
+                          className="rounded font-semibold text-ink-100 underline-offset-4 hover:underline"
+                        >
+                          {v.vehicleNumber}
+                        </button>
+                      </td>
+                      <td className="num whitespace-nowrap">{v.totalLitres} L</td>
+                      <td className="num whitespace-nowrap">{v.avgMileage} km/L</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </Card>
 
         {/* Selected Vehicle Details */}
-        <Card className="md:col-span-2">
-          <CardHeader>
-            <h2 className="text-lg font-semibold">
-              {selectedVehicle ? `Vehicle: ${selectedVehicle.vehicleNumber} | Owner: ${selectedVehicle.customerName}` : 'Select a Vehicle'}
-            </h2>
-          </CardHeader>
-          <CardContent>
-            {selectedVehicle ? (
-              <div className="space-y-6">
-                {/* Summary Stats */}
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="p-4 bg-muted rounded-lg">
-                    <p className="text-sm text-muted-foreground">Total Litres (12m)</p>
-                    <p className="text-2xl font-bold">{selectedVehicle.totalLitres} L</p>
-                  </div>
-                  <div className="p-4 bg-muted rounded-lg">
-                    <p className="text-sm text-muted-foreground">Total Sales</p>
-                    <p className="text-2xl font-bold text-green-500">{formatCurrency(selectedVehicle.totalSales)}</p>
-                  </div>
-                  <div className="p-4 bg-muted rounded-lg">
-                    <p className="text-sm text-muted-foreground">Avg Mileage</p>
-                    <p className="text-2xl font-bold text-orange-500">{selectedVehicle.avgMileage} km/L</p>
-                  </div>
-                </div>
+        <Card>
+          <CardHeader
+            title={
+              selectedVehicle
+                ? `Vehicle: ${selectedVehicle.vehicleNumber} | Owner: ${selectedVehicle.customerName}`
+                : 'Select a Vehicle'
+            }
+          />
+          {selectedVehicle ? (
+            <CardBody className="space-y-6">
+              {/* Summary Stats */}
+              <div className="flex flex-wrap gap-3">
+                <Metric label="Total Litres (12m)" value={<>{selectedVehicle.totalLitres} L</>} />
+                <Metric label="Total Sales" value={formatINR(selectedVehicle.totalSales)} valueClassName="text-ok" />
+                <Metric label="Avg Mileage" value={<>{selectedVehicle.avgMileage} km/L</>} valueClassName="text-accent" />
+              </div>
 
-                {/* Monthly Sales Chart */}
-                <div className="mt-8">
-                  <h3 className="text-lg font-semibold mb-2">Monthly Sales Trend (Last 12 Months)</h3>
-                  {renderMonthlyChart(selectedVehicle.monthlySales)}
-                  <div className="flex justify-between mt-2 text-[10px] text-muted-foreground">
-                    <span>Nov '25</span>
-                    <span>Nov '26</span>
-                  </div>
-                </div>
-
-                {/* Loyalty Points Integration */}
-                <div className="mt-8 p-4 bg-orange-50 rounded-lg border border-orange-200">
-                  <h3 className="text-lg font-semibold mb-2 text-orange-800">Loyalty Points Summary</h3>
-                  <p className="text-sm">Total Points Earned: <span className="font-bold">{selectedVehicle.fuelPointsEarned} pts</span></p>
-                  <p className="text-sm mt-1">Redemption Eligibility: <Badge variant="default">Active</Badge></p>
+              {/* Monthly Sales Chart */}
+              <div>
+                <h3 className="font-display text-sm font-bold text-ink-100">Monthly Sales Trend (Last 12 Months)</h3>
+                {renderMonthlyChart(selectedVehicle.monthlySales)}
+                <div className="mt-2 flex justify-between text-[10px] text-ink-500">
+                  <span>Nov '25</span>
+                  <span>Nov '26</span>
                 </div>
               </div>
-            ) : (
-              <div className="h-64 flex items-center justify-center text-muted-foreground">
-                Select a vehicle from the left to view 12-month history and loyalty points.
+
+              {/* Loyalty Points Integration */}
+              <div className="rounded-xl border border-accent/25 bg-accent/8 p-4">
+                <h3 className="mb-2 font-display text-sm font-bold text-accent">Loyalty Points Summary</h3>
+                <p className="text-sm text-ink-200">
+                  Total Points Earned: <span className="font-bold text-ink-100">{selectedVehicle.fuelPointsEarned} pts</span>
+                </p>
+                <p className="mt-1 text-sm text-ink-200">
+                  Redemption Eligibility: <Badge tone="success">Active</Badge>
+                </p>
               </div>
-            )}
-          </CardContent>
+            </CardBody>
+          ) : (
+            <div className="grid h-64 place-items-center px-6 text-center text-sm text-ink-400">
+              Select a vehicle from the list to view 12-month history and loyalty points.
+            </div>
+          )}
         </Card>
       </div>
     </div>
