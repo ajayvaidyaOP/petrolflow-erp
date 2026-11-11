@@ -105,6 +105,7 @@ export default function Subscriptions() {
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['admin-plans'] });
+    void queryClient.invalidateQueries({ queryKey: ['public-plans'] });
     void queryClient.invalidateQueries({ queryKey: ['admin-subscriptions'] });
     void queryClient.invalidateQueries({ queryKey: ['admin-invoices'] });
     void queryClient.invalidateQueries({ queryKey: ['admin-metrics'] });
@@ -206,6 +207,12 @@ export default function Subscriptions() {
       <div className="mt-4">
         {tab === 'plans' ? (
           <div className="grid gap-4 lg:grid-cols-3">
+            <p className="callout-info lg:col-span-3">
+              Active plans are public. Anyone can open the{' '}
+              <a className="underline underline-offset-2" href="/pricing" target="_blank" rel="noopener noreferrer">pricing page</a>
+              {' '}without signing in and see each active plan's name, description, prices, limits, trial days and features.
+              Deactivate a plan to take it off that page.
+            </p>
             {plans.isLoading ? <LoadingBlock /> : plans.isError ? <ErrorState error={plans.error} /> : (plans.data ?? []).length === 0 ? (
               <Card className="lg:col-span-3"><EmptyState title="No plans" description="Create a plan before onboarding organizations." /></Card>
             ) : (
@@ -315,6 +322,7 @@ export default function Subscriptions() {
         onClose={() => setPlanOpen(false)}
         size="lg"
         title="New subscription plan"
+        description="A new plan is active as soon as it is created, so it appears on the public pricing page straight away."
         footer={
           <>
             <Button variant="ghost" onClick={() => setPlanOpen(false)}>Cancel</Button>

@@ -54,6 +54,7 @@ public final class OpsApi {
         web.post("/gateway/errors", OpsApi::gatewayErrors);
         web.get("/admin/metrics", OpsApi::metrics);
         web.get("/admin/audit", OpsApi::adminAudit);
+        web.get("/public/plans", OpsApi::publicPlans);
         web.get("/admin/plans", OpsApi::plans);
         web.post("/admin/plans", OpsApi::addPlan);
         web.patch("/admin/plans/:id", OpsApi::patchPlan);
@@ -1279,6 +1280,57 @@ public final class OpsApi {
                  WHERE %s ORDER BY a.created_at DESC LIMIT ? OFFSET ?
                 """.formatted(where), params.toArray()));
         ctx.ok(rows, Domain.page(total, page, size));
+    }
+
+    /**
+     * The price list shown on the public pricing page and the sign-in screen. It needs no session, so
+     * it lists only plans the platform administrator has left active, in the same cheapest-first order
+     * as the admin screen. Deactivating a plan removes it from this list.
+     */
+    private static void publicPlans(Web.Ctx ctx) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+        for (Map<String, Object> raw : Db.all(
+                """
+                SELECT code, name, description, monthly_price, annual_price, max_stations, max_users, max_dispensers, trial_days, features
+                  FROM subscription_plans
+                 WHERE is_active = 1
+                 ORDER BY CAST(monthly_price AS DECIMAL(18,2)) ASC, name ASC
+                """)) {
+            rows.add(publicPlan(raw));
+        }
+        ctx.ok(rows);
+    }
+
+    /**
+     * What an anonymous visitor may see of a plan. Built field by field, so that internal columns
+     * (ids, subscriber counts, timestamps) cannot leak whatever the query selects. Prices are passed
+     * through exactly as stored, which is what the admin screen shows for the same plan.
+     */
+    static Map<String, Object> publicPlan(Map<String, Object> row) {
+        Map<String, Object> plan = new LinkedHashMap<>();
+        plan.put("code", Db.str(row, "code"));
+        plan.put("name", Db.str(row, "name"));
+        plan.put("description", emptyToNull(Db.str(row, "description")));
+        plan.put("monthlyPrice", Db.str(row, "monthly_price"));
+        plan.put("annualPrice", Db.str(row, "annual_price"));
+        plan.put("maxStations", Db.num(row, "max_stations"));
+        plan.put("maxUsers", Db.num(row, "max_users"));
+        plan.put("maxDispensers", Db.num(row, "max_dispensers"));
+        plan.put("trialDays", Db.num(row, "trial_days"));
+        List<String> features = new ArrayList<>();
+        Object parsed;
+        try {
+            parsed = Json.parse(Db.str(row, "features"));
+        } catch (RuntimeException malformed) {
+            parsed = null;
+        }
+        if (parsed instanceof List<?> items) {
+            for (Object item : items) {
+                if (item instanceof String text && !text.isBlank()) features.add(text.trim());
+            }
+        }
+        plan.put("features", features);
+        return plan;
     }
 
     private static void plans(Web.Ctx ctx) {

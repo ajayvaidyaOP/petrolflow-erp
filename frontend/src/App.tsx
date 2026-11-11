@@ -8,6 +8,7 @@ import { Button, EmptyState, PageLoader } from './components/ui';
 // each screen is fetched on demand, which keeps the first paint fast on forecourt
 // tablets and phones instead of shipping every screen in one large bundle.
 const Login = lazy(() => import('./pages/Login'));
+const Pricing = lazy(() => import('./pages/Pricing'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Stations = lazy(() => import('./pages/Stations'));
 const Products = lazy(() => import('./pages/Products'));
@@ -106,6 +107,8 @@ export default function App() {
           path="/login"
           element={isAuthenticated ? <Navigate to={me?.isSuperAdmin ? '/admin' : '/'} replace /> : <Login />}
         />
+        {/* Public: the price list is the same for visitors and for signed-in users. */}
+        <Route path="/pricing" element={<Pricing />} />
 
         <Route
           element={
