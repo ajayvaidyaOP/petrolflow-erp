@@ -593,7 +593,7 @@ function ReversePaymentModal({
         </>
       }
     >
-      <Field label="Reason" required>
+      <Field label="Reason" required hint="At least 5 characters. It is kept in the audit trail.">
         <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Duplicate entry, wrong amount, cheque bounce…" />
       </Field>
       <p className="mt-2 text-[11px] text-ink-500">Reversing {payment.direction.toLowerCase()} of {formatINR(payment.amount)}.</p>

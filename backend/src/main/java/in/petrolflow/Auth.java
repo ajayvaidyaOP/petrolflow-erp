@@ -35,6 +35,14 @@ public final class Auth {
         if (!can(permission)) throw ApiException.forbidden("Missing permission: " + permission);
     }
 
+    /** Passes when the login holds at least one of the permissions. A refusal names the first one. */
+    public void requireAny(List<String> anyOf) {
+        for (String permission : anyOf) {
+            if (can(permission)) return;
+        }
+        throw ApiException.forbidden("Missing permission: " + anyOf.get(0));
+    }
+
     /** Destructive master-data deletion is reserved for the organization owner. */
     public void requireOwner() {
         if (!"OWNER".equals(roleKey)) {

@@ -5,6 +5,7 @@ import { apiDelete, apiGet, apiList, apiPatch, apiPost, type ListMeta } from '..
 import { DeleteRecordButton, ExportCsvButton } from '../components/OwnerActions';
 import { useIdempotencyKey } from '../lib/idempotency';
 import { useAuth, useStations } from '../lib/auth';
+import { canReadLookup } from '@petroflow/shared';
 import { formatDate, formatDateTime, formatINR, formatNumber, todayIst } from '../lib/format';
 import {
   Badge,
@@ -114,7 +115,7 @@ export default function Customers() {
   const products = useQuery({
     queryKey: ['products'],
     queryFn: () => apiGet<Product[]>('/catalog/products?pageSize=50'),
-    enabled: can('products.read'),
+    enabled: canReadLookup(can, 'products'),
   });
 
   const ledger = useQuery({
@@ -511,9 +512,9 @@ function FollowUpPanel({ customerId, canWrite }: { customerId: string; canWrite:
             <option value="PROMISE">Promise</option>
             <option value="NOTE">Note</option>
           </Select>
-          <Input value={note} onChange={(event) => setNote(event.target.value)} placeholder="What was said" />
+          <Input value={note} onChange={(event) => setNote(event.target.value)} placeholder="What was said" aria-label="What was said" />
           <Input type="date" value={nextOn} onChange={(event) => setNextOn(event.target.value)} aria-label="Next follow-up date" />
-          <Input inputMode="decimal" value={promised} onChange={(event) => setPromised(event.target.value)} placeholder="Promise ₹" />
+          <Input inputMode="decimal" value={promised} onChange={(event) => setPromised(event.target.value)} placeholder="Promise ₹" aria-label="Promised amount in rupees" />
           <Button size="sm" variant="secondary" disabled={note.trim().length < 2} loading={save.isPending} onClick={() => save.mutate()}>Save</Button>
         </div>
       )}

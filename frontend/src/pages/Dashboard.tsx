@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { apiGet } from '../lib/api';
 import { useAuth, useStations } from '../lib/auth';
+import { canReadLookup } from '@petroflow/shared';
 import type { ShiftAlertsResponse } from '../lib/shifts';
 import { buildAttentionItems, type OperationalAlert } from '../lib/alerts';
 import { useChartPalette } from '../lib/theme';
@@ -139,14 +140,14 @@ export default function Dashboard() {
   const alertsQuery = useQuery({
     queryKey: ['shift-alerts', stationId],
     queryFn: () => apiGet<ShiftAlertsResponse>(`/shifts/alerts?stationId=${stationId}`),
-    enabled: Boolean(stationId) && !compare,
+    enabled: Boolean(stationId) && !compare && can('shifts.read'),
     refetchInterval: 60_000,
   });
 
   const pricesQuery = useQuery<PriceRow[]>({
     queryKey: ['prices', stationId],
     queryFn: () => apiGet<PriceRow[]>(`/catalog/prices?stationId=${stationId}`),
-    enabled: Boolean(stationId) && !compare,
+    enabled: Boolean(stationId) && !compare && canReadLookup(can, 'prices'),
     refetchInterval: 60_000,
   });
 

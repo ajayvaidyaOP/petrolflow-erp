@@ -6,6 +6,7 @@ import { apiGet, apiList, apiPost, type ListMeta } from '../lib/api';
 import { DeleteRecordButton, ExportCsvButton } from '../components/OwnerActions';
 import { useIdempotencyTracker } from '../lib/idempotency';
 import { useAuth, useStations } from '../lib/auth';
+import { canReadLookup } from '@petroflow/shared';
 import { formatDate, formatDateTime, formatINR, formatNumber } from '../lib/format';
 import { downloadCsv } from '../lib/utils';
 import {
@@ -99,7 +100,7 @@ export default function Deliveries() {
   const tanks = useQuery({
     queryKey: ['tanks-lite', stationId],
     queryFn: () => apiGet<Tank[]>(`/catalog/tanks?stationId=${stationId}&pageSize=100`),
-    enabled: Boolean(stationId) && can('tanks.read'),
+    enabled: Boolean(stationId) && canReadLookup(can, 'tanks'),
   });
   const suppliers = useQuery({
     queryKey: ['suppliers-lite'],
@@ -109,7 +110,7 @@ export default function Deliveries() {
   const products = useQuery({
     queryKey: ['products-lite'],
     queryFn: () => apiGet<Product[]>('/catalog/products?pageSize=50'),
-    enabled: can('products.read'),
+    enabled: canReadLookup(can, 'products'),
   });
 
   const invalidate = () => {
@@ -566,7 +567,7 @@ function DisputeModal({
         </>
       }
     >
-      <Field label="Reason" required>
+      <Field label="Reason" required hint="At least 5 characters. It is kept in the audit trail.">
         <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Quantity short, quality issue, rate mismatch…" />
       </Field>
       <p className="mt-2 text-[11px] text-ink-500">

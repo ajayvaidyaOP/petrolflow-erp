@@ -622,3 +622,21 @@
     overflow: visible !important;
   }
 }
+
+/* Print only the credit bill, not the workspace behind its portal dialog. */
+@media print {
+  body:has(#credit-bill-print) #root { display: none !important; }
+  body:has(#credit-bill-print) > div:has(#credit-bill-print),
+  [role='dialog']:has(#credit-bill-print),
+  [role='dialog']:has(#credit-bill-print) > div:has(#credit-bill-print) {
+    position: static !important; display: block !important; max-height: none !important;
+    height: auto !important; width: 100% !important; max-width: none !important;
+    overflow: visible !important; transform: none !important; margin: 0 !important;
+    padding: 0 !important; border: 0 !important; box-shadow: none !important;
+    background: white !important; backdrop-filter: none !important;
+  }
+  [role='dialog']:has(#credit-bill-print) > div:not(:has(#credit-bill-print)),
+  [role='dialog'] > div:has(> #credit-bill-print) > :not(#credit-bill-print) { display: none !important; }
+  #credit-bill-print .table-wrap { overflow: visible !important; }
+  #credit-bill-print tr { break-inside: avoid; }
+}

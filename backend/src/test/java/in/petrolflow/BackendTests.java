@@ -31,6 +31,7 @@ public final class BackendTests {
         testMysqlConnectionInitializationWithoutDatabaseCreation();
         testFinanceRules();
         testPublicPlanShape();
+        testPurchaseDecimals();
         if (!Boolean.parseBoolean(System.getenv().getOrDefault("SKIP_DB_TESTS", "false"))) {
             testHttpAndDatabaseIntegration();
         }
@@ -123,6 +124,22 @@ public final class BackendTests {
         Domain.DensityEvaluation density = Domain.evaluateDensityAt15c("DIESEL", "835.0", "15.0");
         check(density.specificationUsed().contains("Uncertified") && density.specificationUsed().contains("not statutory compliance"),
                 "density label does not claim ASTM/IS compliance");
+    }
+
+    private static void testPurchaseDecimals() {
+        check(PurchaseApi.decimal("12.3456", "quantity", 3, true).toPlainString().equals("12.346"), "Purchases round litres to three decimals");
+        check(PurchaseApi.decimal("0", "tax", 2, false).signum() == 0, "Purchases accept zero invoice tax");
+        BigDecimal a = PurchaseApi.allocated(new BigDecimal("1"), new BigDecimal("3"), new BigDecimal("1"));
+        BigDecimal b = PurchaseApi.allocated(new BigDecimal("2"), new BigDecimal("3"), new BigDecimal("1"));
+        BigDecimal c = PurchaseApi.allocated(new BigDecimal("3"), new BigDecimal("3"), new BigDecimal("1"));
+        check(a.toPlainString().equals("0.33"), "Partial purchases allocate first third to 33 paise");
+        check(b.subtract(a).toPlainString().equals("0.34"), "Partial purchases recover rounding penny cumulatively");
+        check(c.toPlainString().equals("1.00"), "Full purchase allocation equals invoice total exactly");
+        for (String invalid : List.of("-1", "NaN", "Infinity", "abc", "999999999999999999999")) {
+            boolean refused = false;
+            try { PurchaseApi.decimal(invalid, "amount", 2, true); } catch (ApiException e) { refused = true; }
+            check(refused, "Purchases refuse invalid amount " + invalid);
+        }
     }
 
     private static void testPublicPlanShape() {

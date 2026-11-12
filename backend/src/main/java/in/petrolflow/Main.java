@@ -128,6 +128,8 @@ public final class Main {
         CatalogApi.register(web);
         ShiftApi.register(web);
         FinanceApi.register(web);
+        PurchaseApi.register(web);
+        CreditBillingApi.register(web);
         ReportApi.register(web);
         OpsApi.register(web);
         return web;
