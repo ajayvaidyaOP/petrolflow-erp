@@ -104,7 +104,7 @@ export default function Employees() {
       <PageHeader
         title="Your team"
         description="One owner. Add staff logins and tick exactly what each person can open."
-        actions={<><ExportCsvButton path="/catalog/employees" filename="petroflow-staff" />{can('employees.write') ? <Button variant="primary" onClick={openCreate} icon={<Plus className="h-4 w-4" />}>Add staff login</Button> : null}</>}
+        actions={<>{can('employees.read') && <ExportCsvButton path="/catalog/employees" filename="petroflow-staff" />}{can('employees.write') ? <Button variant="primary" onClick={openCreate} icon={<Plus className="h-4 w-4" />}>Add staff login</Button> : null}</>}
       />
       {can('employees.read') && (employees.isLoading ? <LoadingBlock rows={6} /> : employees.isError ? <ErrorState error={employees.error} onRetry={() => void employees.refetch()} /> : (
         <>

@@ -3,6 +3,7 @@ package in.petrolflow;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public final class Permissions {
@@ -36,7 +37,33 @@ public final class Permissions {
             "compliance.read", "lubricants.read", "lubricants.write",
             "attendance.read", "attendance.write");
 
+    /**
+     * Reference lists that screens use to label or pick things: the nozzle on a meter reading, the tank
+     * on a delivery, the product on a credit slip, today's rate on the overview. A login that holds any
+     * one of the listed permissions may read the list, because the screen that permission opens cannot
+     * work without it. The first entry is the list's own permission and the one named in a refusal.
+     * Changing the records still needs the dedicated write permission.
+     *
+     * <p>The web app mirrors this table in frontend/src/shared/permissions.ts (LOOKUP_ACCESS). Keep the
+     * two in step.
+     */
+    private static final Map<String, List<String>> LOOKUPS = Map.of(
+            "products", List.of("products.read", "stock.read", "tanks.read", "deliveries.read", "density.read",
+                    "dispensers.read", "sales.write"),
+            "prices", List.of("products.read", "reports.read"),
+            "tanks", List.of("tanks.read", "stock.read", "deliveries.read", "density.read", "dispensers.read",
+                    "compliance.read"),
+            "dispensers", List.of("dispensers.read", "compliance.read"),
+            "nozzles", List.of("dispensers.read", "readings.read", "sales.read"));
+
     private Permissions() {}
+
+    /** The permissions that open a reference list; any one is enough. */
+    public static List<String> lookup(String list) {
+        List<String> anyOf = LOOKUPS.get(list);
+        if (anyOf == null) throw new IllegalArgumentException("Unknown reference list: " + list);
+        return anyOf;
+    }
 
     public static List<String> forRole(String role) {
         return switch (role == null ? "" : role) {

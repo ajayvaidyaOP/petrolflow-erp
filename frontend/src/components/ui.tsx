@@ -475,7 +475,7 @@ export function Modal({
   description?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -541,7 +541,7 @@ export function Modal({
   }, [open]);
 
   if (!open) return null;
-  const widths = { sm: 'max-w-md', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl' };
+  const widths = { sm: 'max-w-md', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl', '2xl': 'max-w-6xl' };
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto overscroll-contain bg-scrim/60 p-0 backdrop-blur-[3px] sm:items-center sm:p-6">

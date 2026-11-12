@@ -51,6 +51,7 @@ export const navigation: NavigationSection[] = [
     children: [
       { to: '/tanks', label: 'Tank stock', permission: 'stock.read' },
       { to: '/deliveries', label: 'Deliveries', permission: 'deliveries.read' },
+      { to: '/purchases', label: 'Purchase invoices', permission: 'deliveries.read' },
       { to: '/lubricants', label: 'Lubricants', permission: 'lubricants.read' },
     ],
   },
@@ -63,6 +64,7 @@ export const navigation: NavigationSection[] = [
     children: [
       { to: '/sales', label: 'Fuel sales', permission: 'sales.read' },
       { to: '/customers', label: 'Customer credit', permission: 'customers.read' },
+      { to: '/credit-billing', label: 'Credit billing', permission: 'customers.read' },
     ],
   },
   {

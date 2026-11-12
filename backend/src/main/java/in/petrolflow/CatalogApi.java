@@ -14,33 +14,33 @@ public final class CatalogApi {
         web.post("/catalog/stations", CatalogApi::createStation);
         web.patch("/catalog/stations/:id", CatalogApi::patchStation);
         web.delete("/catalog/stations/:id", ctx -> crudDelete(ctx, "stations", "stations.write", true, false,
-                new String[][]{{"shifts","station_id"},{"tanks","station_id"},{"dispensers","station_id"},{"expenses","station_id"},{"payments","station_id"},{"deliveries","station_id"}},
+                new String[][]{{"shifts","station_id"},{"tanks","station_id"},{"dispensers","station_id"},{"expenses","station_id"},{"payments","station_id"},{"deliveries","station_id"},{"purchase_invoices","station_id"},{"credit_bills","station_id"}},
                 new String[]{}));
-        web.get("/catalog/products", ctx -> crudList(ctx, "fuel_products", "products.read", true, false, "code", "name"));
+        web.get("/catalog/products", ctx -> crudList(ctx, "fuel_products", Permissions.lookup("products"), true, false, "code", "name"));
         web.post("/catalog/products", ctx -> crudCreate(ctx, "fuel_products", "prd", "products.write", true, false, "code", "name", "category", "unit", "color", "isActive"));
         web.patch("/catalog/products/:id", ctx -> crudPatch(ctx, "fuel_products", "products.write", true, "name", "category", "unit", "color", "isActive"));
         web.delete("/catalog/products/:id", ctx -> crudDelete(ctx, "fuel_products", "products.write", true, false,
-                new String[][]{{"fuel_prices","product_id"},{"tanks","product_id"},{"nozzles","product_id"},{"deliveries","product_id"},{"fuel_transactions","product_id"},{"stock_movements","product_id"},{"density_checks","product_id"}},
+                new String[][]{{"fuel_prices","product_id"},{"tanks","product_id"},{"nozzles","product_id"},{"deliveries","product_id"},{"fuel_transactions","product_id"},{"stock_movements","product_id"},{"density_checks","product_id"},{"purchase_invoice_lines","product_id"}},
                 new String[]{}));
         web.get("/catalog/prices", CatalogApi::prices);
         web.get("/catalog/prices/current", CatalogApi::currentPrices);
         web.post("/catalog/prices", CatalogApi::createPrice);
-        web.get("/catalog/tanks", ctx -> crudList(ctx, "tanks", "tanks.read", false, true, "code", "name"));
+        web.get("/catalog/tanks", ctx -> crudList(ctx, "tanks", Permissions.lookup("tanks"), false, true, "code", "name"));
         web.post("/catalog/tanks", CatalogApi::createTank);
         web.patch("/catalog/tanks/:id", CatalogApi::patchTank);
         web.delete("/catalog/tanks/:id", ctx -> crudDelete(ctx, "tanks", "tanks.write", false, true,
-                new String[][]{{"stock_movements","tank_id"},{"tank_measurements","tank_id"},{"deliveries","tank_id"},{"nozzles","tank_id"},{"density_checks","tank_id"}},
+                new String[][]{{"stock_movements","tank_id"},{"tank_measurements","tank_id"},{"deliveries","tank_id"},{"nozzles","tank_id"},{"density_checks","tank_id"},{"purchase_invoice_lines","tank_id"}},
                 new String[]{"tank_calibration_points"}));
         web.get("/catalog/tanks/:id/calibration", CatalogApi::getCalibration);
         web.put("/catalog/tanks/:id/calibration", CatalogApi::putCalibration);
         web.get("/catalog/tanks/:id/measurements", CatalogApi::listMeasurements);
         web.post("/catalog/tanks/:id/measurements", CatalogApi::measurement);
-        web.get("/catalog/dispensers", ctx -> crudList(ctx, "dispensers", "dispensers.read", false, true, "code", "name"));
+        web.get("/catalog/dispensers", ctx -> crudList(ctx, "dispensers", Permissions.lookup("dispensers"), false, true, "code", "name"));
         web.post("/catalog/dispensers", ctx -> crudCreate(ctx, "dispensers", "dsp", "dispensers.write", false, true, "code", "name", "serialNumber", "model", "protocol", "status"));
         web.patch("/catalog/dispensers/:id", ctx -> crudPatch(ctx, "dispensers", "dispensers.write", false, "name", "model", "serialNumber", "protocol", "status"));
         web.delete("/catalog/dispensers/:id", ctx -> crudDelete(ctx, "dispensers", "dispensers.write", false, true,
                 new String[][]{{"nozzles","dispenser_id"}}, new String[]{}));
-        web.get("/catalog/nozzles", ctx -> crudList(ctx, "nozzles", "dispensers.read", false, true, "label", "number"));
+        web.get("/catalog/nozzles", ctx -> crudList(ctx, "nozzles", Permissions.lookup("nozzles"), false, true, "label", "number"));
         web.post("/catalog/nozzles", CatalogApi::createNozzle);
         web.patch("/catalog/nozzles/:id", CatalogApi::patchNozzle);
         web.delete("/catalog/nozzles/:id", ctx -> crudDelete(ctx, "nozzles", "dispensers.write", false, true,
@@ -50,7 +50,7 @@ public final class CatalogApi {
         web.post("/catalog/customers", ctx -> crudCreate(ctx, "customers", "cus", "customers.write", true, false, "code", "name", "phone", "email", "gstin", "address", "creditLimit", "creditDays", "status"));
         web.patch("/catalog/customers/:id", ctx -> crudPatch(ctx, "customers", "customers.write", true, "name", "phone", "email", "gstin", "address", "creditLimit", "creditDays", "status"));
         web.delete("/catalog/customers/:id", ctx -> crudDelete(ctx, "customers", "customers.write", true, false,
-                new String[][]{{"credit_entries","customer_id"},{"payments","customer_id"},{"fuel_transactions","customer_id"},{"lube_movements","customer_id"}},
+                new String[][]{{"credit_entries","customer_id"},{"payments","customer_id"},{"fuel_transactions","customer_id"},{"lube_movements","customer_id"},{"credit_bills","customer_id"}},
                 new String[]{"customer_vehicles","customer_followups"}));
         web.get("/catalog/customers/:id/vehicles", CatalogApi::vehicles);
         web.post("/catalog/customers/:id/vehicles", CatalogApi::addVehicle);
@@ -59,7 +59,7 @@ public final class CatalogApi {
         web.post("/catalog/suppliers", ctx -> crudCreate(ctx, "suppliers", "sup", "suppliers.write", true, false, "code", "name", "contactPerson", "phone", "email", "gstin", "address", "creditDays", "openingBalance", "isActive"));
         web.patch("/catalog/suppliers/:id", ctx -> crudPatch(ctx, "suppliers", "suppliers.write", true, "name", "contactPerson", "phone", "email", "gstin", "address", "creditDays", "isActive"));
         web.delete("/catalog/suppliers/:id", ctx -> crudDelete(ctx, "suppliers", "suppliers.write", true, false,
-                new String[][]{{"deliveries","supplier_id"},{"payments","supplier_id"},{"lube_movements","supplier_id"}}, new String[]{}));
+                new String[][]{{"deliveries","supplier_id"},{"payments","supplier_id"},{"lube_movements","supplier_id"},{"purchase_invoices","supplier_id"}}, new String[]{}));
         web.get("/catalog/expense-categories", ctx -> crudList(ctx, "expense_categories", "expenses.read", true, false, "name"));
         web.post("/catalog/expense-categories", ctx -> crudCreate(ctx, "expense_categories", "exc", "expenses.write", true, false, "name", "isActive"));
         web.patch("/catalog/expense-categories/:id", ctx -> crudPatch(ctx, "expense_categories", "expenses.write", true, "name", "isActive"));
@@ -278,7 +278,7 @@ public final class CatalogApi {
 
     private static void prices(Web.Ctx ctx) {
         Auth auth = ctx.requireAuth();
-        auth.require("products.read");
+        auth.requireAny(Permissions.lookup("prices"));
         String stationId = ctx.q("stationId");
         if (stationId != null) auth.station(stationId);
         List<Map<String, Object>> rows = Db.all(
@@ -302,7 +302,7 @@ public final class CatalogApi {
 
     private static void currentPrices(Web.Ctx ctx) {
         Auth auth = ctx.requireAuth();
-        auth.require("products.read");
+        auth.requireAny(Permissions.lookup("prices"));
         String stationId = ctx.q("stationId");
         if (stationId != null && !stationId.isBlank()) auth.station(stationId);
         List<Map<String, Object>> out = new ArrayList<>();
@@ -748,8 +748,13 @@ public final class CatalogApi {
     }
 
     private static void crudList(Web.Ctx ctx, String table, String permission, boolean tenant, boolean station, String... search) {
+        crudList(ctx, table, List.of(permission), tenant, station, search);
+    }
+
+    /** Lists a table for a login that holds any one of {@code anyOf} (see {@link Permissions#lookup}). */
+    private static void crudList(Web.Ctx ctx, String table, List<String> anyOf, boolean tenant, boolean station, String... search) {
         Auth auth = ctx.requireAuth();
-        auth.require(permission);
+        auth.requireAny(anyOf);
         int page = Domain.pageOf(ctx);
         int size = Domain.pageSize(ctx);
         List<String> clauses = new ArrayList<>();

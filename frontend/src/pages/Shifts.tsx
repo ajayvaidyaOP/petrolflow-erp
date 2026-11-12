@@ -101,7 +101,7 @@ interface DayClosing {
 
 interface CapturePreview {
   shiftId: string;
-  preview: { nozzleId: string; nozzle: string; closing: string | null; litres: string | null; status: string; note: string | null }[];
+  preview: { nozzleId: string; label: string; closing: string | null; litres: string | null; status: string; note: string | null }[];
   note: string;
 }
 
@@ -389,7 +389,7 @@ export default function Shifts() {
         onClose={() => setSelectedId(null)}
         title={shift ? `Shift #${shift.shiftNumber} · ${shift.businessDate}` : 'Shift detail'}
         description={shift ? `${shift.stationName} · ${shift.status}` : undefined}
-        size="xl"
+        size="2xl"
         footer={
           shift ? (
             <div className="flex w-full flex-wrap items-center justify-between gap-2">
@@ -446,7 +446,7 @@ export default function Shifts() {
                 <p className="text-[11px] text-ink-500">{capturePreview.note}</p>
                 {capturePreview.preview.map((item) => (
                   <p key={item.nozzleId} className="text-xs text-ink-300">
-                    {item.nozzle}: closing {item.closing ?? 'missing'} · {item.litres === null ? 'no volume' : `${item.litres} L net`}
+                    {item.label}: closing {item.closing ?? 'missing'} · {item.litres === null ? 'no volume' : `${item.litres} L net`}
                     {(item as { testingLitres?: string }).testingLitres && Number((item as { testingLitres?: string }).testingLitres) > 0
                       ? ` (testing ${(item as { testingLitres?: string }).testingLitres} L deducted)` : ''} · {item.status}
                     {item.note ? ` — ${item.note}` : ''}

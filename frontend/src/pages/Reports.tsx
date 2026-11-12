@@ -126,7 +126,14 @@ export default function Reports() {
               icon={<Download className="h-3.5 w-3.5" />}
               className="mt-4"
               disabled={!dsr.data}
-              onClick={() => downloadCsv(`dsr-${date}.csv`, nozzleRows(dsr.data!))}
+              onClick={() => {
+                const rows = nozzleRows(dsr.data!);
+                if (rows.length === 0) {
+                  toast('Nothing to download', { tone: 'warning', description: 'No nozzle sales are recorded for this date. Pick a date with a closed shift.' });
+                  return;
+                }
+                downloadCsv(`dsr-${date}.csv`, rows);
+              }}
             >
               Download CSV
             </Button>

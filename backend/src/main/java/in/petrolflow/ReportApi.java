@@ -130,6 +130,9 @@ public final class ReportApi {
         stationPayables = stationPayables.subtract(Money.d(Db.one(
                 "SELECT COALESCE(SUM(CAST(amount AS DECIMAL(20,2))), 0) AS total FROM payments WHERE station_id = ? AND direction = 'PAYOUT' AND status != 'REVERSED'",
                 station.get("id")).get("total")));
+        stationPayables = stationPayables.add(Money.d(Db.one(
+                "SELECT COALESCE(SUM(CASE WHEN e.kind='RETURN' THEN -e.amount ELSE e.amount END),0) AS total FROM purchase_events e JOIN purchase_invoices p ON p.id=e.invoice_id WHERE p.station_id=?",
+                station.get("id")).get("total")));
         data.put("receivables", Money.money(stationReceivables));
         data.put("payables", Money.money(stationPayables.max(BigDecimal.ZERO)));
         data.put("trend", trend);
@@ -250,6 +253,11 @@ public final class ReportApi {
                  WHERE d.station_id = ? AND d.invoice_date = ?
                  ORDER BY d.created_at DESC
                 """, station.get("id"), date));
+        deliveries = new ArrayList<>(deliveries);
+        for (Map<String,Object> e : Db.all("SELECT e.*,p.invoice_number,s.name AS supplier_name,(SELECT SUM(quantity_litres) FROM purchase_event_lines WHERE event_id=e.id) AS litres FROM purchase_events e JOIN purchase_invoices p ON p.id=e.invoice_id JOIN suppliers s ON s.id=p.supplier_id WHERE p.station_id=? AND e.occurred_at>=? AND e.occurred_at<=?",station.get("id"),start,end)) {
+            boolean ret = "RETURN".equals(e.get("kind"));
+            deliveries.add(Web.map("id",e.get("id"),"supplierName",e.get("supplier_name"),"invoiceNumber",e.get("invoice_number"),"quantityLitres",Money.litres(ret ? Money.d(e.get("litres")).negate() : Money.d(e.get("litres"))),"productName",ret ? "Purchase return" : "Purchase receipt","totalAmount",Money.money(ret ? Money.d(e.get("amount")).negate() : Money.d(e.get("amount"))),"status","RECEIVED"));
+        }
         List<Map<String, Object>> receipts = Json.shapeAll(Db.all(
                 """
                 SELECT pay.*, c.name AS customer_name

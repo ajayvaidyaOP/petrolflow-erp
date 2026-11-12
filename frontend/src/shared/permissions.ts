@@ -76,6 +76,27 @@ export const STAFF_GRANTABLE: Permission[] = Object.values(P).filter(
 
 const GRANTABLE = new Set<string>(STAFF_GRANTABLE);
 
+/**
+ * Reference lists that screens use to label or pick things: the nozzle on a meter reading, the tank on
+ * a delivery, the product on a credit slip, today's rate on the overview. Holding any one of the listed
+ * permissions is enough to read the list. This mirrors Permissions.LOOKUPS in the Java API, which is
+ * what actually enforces it; keep the two in step.
+ */
+export const LOOKUP_ACCESS = {
+  products: [P.PRODUCTS_READ, P.STOCK_READ, P.TANKS_READ, P.DELIVERIES_READ, P.DENSITY_READ, P.DISPENSERS_READ, P.SALES_WRITE],
+  prices: [P.PRODUCTS_READ, P.REPORTS_READ],
+  tanks: [P.TANKS_READ, P.STOCK_READ, P.DELIVERIES_READ, P.DENSITY_READ, P.DISPENSERS_READ, P.COMPLIANCE_READ],
+  dispensers: [P.DISPENSERS_READ, P.COMPLIANCE_READ],
+  nozzles: [P.DISPENSERS_READ, P.READINGS_READ, P.SALES_READ],
+} as const satisfies Record<string, readonly Permission[]>;
+
+export type LookupList = keyof typeof LOOKUP_ACCESS;
+
+/** True when the login may read the given reference list. */
+export function canReadLookup(can: (permission: string) => boolean, list: LookupList): boolean {
+  return LOOKUP_ACCESS[list].some((permission) => can(permission));
+}
+
 export interface PermissionGroup {
   id: string;
   label: string;

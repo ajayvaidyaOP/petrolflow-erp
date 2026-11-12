@@ -1195,3 +1195,145 @@ EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
 SET FOREIGN_KEY_CHECKS = 1;
+
+-- Multi-line fuel purchase invoices. Existing single-tank deliveries remain independent.
+CREATE TABLE IF NOT EXISTS purchase_invoices (
+ id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
+ tenant_id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ station_id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ supplier_id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ invoice_number VARCHAR(120) NOT NULL,
+ invoice_date DATE NOT NULL,
+ due_date DATE NOT NULL,
+ status VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
+ subtotal DECIMAL(20,2) NOT NULL,
+ discount_amount DECIMAL(20,2) NOT NULL DEFAULT 0,
+ freight_amount DECIMAL(20,2) NOT NULL DEFAULT 0,
+ tax_amount DECIMAL(20,2) NOT NULL DEFAULT 0,
+ total_amount DECIMAL(20,2) NOT NULL,
+ vehicle_number VARCHAR(80),
+ transporter VARCHAR(160),
+ notes TEXT,
+ created_by VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ created_at VARCHAR(40) NOT NULL,
+ posted_at VARCHAR(40),
+ returned_at VARCHAR(40),
+ return_reason TEXT,
+ UNIQUE KEY uq_purchase_number (tenant_id, supplier_id, invoice_number),
+ KEY idx_purchase_station (station_id, invoice_date),
+ FOREIGN KEY (tenant_id) REFERENCES tenants(id),
+ FOREIGN KEY (station_id) REFERENCES stations(id),
+ FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS purchase_invoice_lines (
+ id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
+ invoice_id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ line_number INT NOT NULL,
+ tank_id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ product_id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ quantity_litres DECIMAL(18,3) NOT NULL,
+ rate_per_litre DECIMAL(18,3) NOT NULL,
+ amount DECIMAL(20,2) NOT NULL,
+ UNIQUE KEY uq_purchase_line (invoice_id, line_number),
+ FOREIGN KEY (invoice_id) REFERENCES purchase_invoices(id),
+ FOREIGN KEY (tank_id) REFERENCES tanks(id),
+ FOREIGN KEY (product_id) REFERENCES fuel_products(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Idempotent migration also upgrades databases created by the initial purchase module.
+SET @exists := (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'purchase_invoices' AND column_name = 'revision');
+SET @ddl := IF(@exists = 0, 'ALTER TABLE purchase_invoices ADD COLUMN revision INT NOT NULL DEFAULT 1', 'DO 0');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+CREATE TABLE IF NOT EXISTS purchase_events (
+ id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
+ invoice_id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ kind VARCHAR(16) NOT NULL,
+ amount DECIMAL(20,2) NOT NULL,
+ note TEXT,
+ occurred_at VARCHAR(40) NOT NULL,
+ created_by VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin,
+ KEY idx_purchase_events_invoice (invoice_id),
+ FOREIGN KEY (invoice_id) REFERENCES purchase_invoices(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS purchase_event_lines (
+ id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
+ event_id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ invoice_line_id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ quantity_litres DECIMAL(18,3) NOT NULL,
+ UNIQUE KEY uq_purchase_event_line (event_id,invoice_line_id),
+ FOREIGN KEY (event_id) REFERENCES purchase_events(id),
+ FOREIGN KEY (invoice_line_id) REFERENCES purchase_invoice_lines(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Preserve posting dates and balances of full receipts/returns made before event support.
+INSERT INTO purchase_events (id,invoice_id,kind,amount,note,occurred_at,created_by)
+SELECT CONCAT('pr-',p.id),p.id,'RECEIPT',p.total_amount,'Migrated full receipt',p.posted_at,p.created_by
+FROM purchase_invoices p WHERE p.status IN ('RECEIVED','RETURNED')
+AND NOT EXISTS (SELECT 1 FROM purchase_events e WHERE e.invoice_id=p.id AND e.kind='RECEIPT');
+INSERT INTO purchase_events (id,invoice_id,kind,amount,note,occurred_at,created_by)
+SELECT CONCAT('pt-',p.id),p.id,'RETURN',p.total_amount,p.return_reason,p.returned_at,p.created_by
+FROM purchase_invoices p WHERE p.status='RETURNED'
+AND NOT EXISTS (SELECT 1 FROM purchase_events e WHERE e.invoice_id=p.id AND e.kind='RETURN');
+INSERT INTO purchase_event_lines (id,event_id,invoice_line_id,quantity_litres)
+SELECT CONCAT('pr-',l.id),e.id,l.id,l.quantity_litres FROM purchase_invoice_lines l
+JOIN purchase_events e ON e.invoice_id=l.invoice_id AND e.id=CONCAT('pr-',l.invoice_id)
+WHERE NOT EXISTS (SELECT 1 FROM purchase_event_lines x WHERE x.event_id=e.id AND x.invoice_line_id=l.id);
+INSERT INTO purchase_event_lines (id,event_id,invoice_line_id,quantity_litres)
+SELECT CONCAT('pt-',l.id),e.id,l.id,l.quantity_litres FROM purchase_invoice_lines l
+JOIN purchase_events e ON e.invoice_id=l.invoice_id AND e.id=CONCAT('pt-',l.invoice_id)
+WHERE NOT EXISTS (SELECT 1 FROM purchase_event_lines x WHERE x.event_id=e.id AND x.invoice_line_id=l.id);
+
+SET @exists := (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='purchase_invoices' AND column_name='document_type');
+SET @ddl := IF(@exists=0, 'ALTER TABLE purchase_invoices ADD COLUMN document_type VARCHAR(16) NOT NULL DEFAULT ''INVOICE''', 'DO 0');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+SET @exists := (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='purchase_invoices' AND column_name='source_order_id');
+SET @ddl := IF(@exists=0, 'ALTER TABLE purchase_invoices ADD COLUMN source_order_id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL', 'DO 0');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+SET @exists := (SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema=DATABASE() AND table_name='purchase_invoices' AND index_name='uq_purchase_source_order');
+SET @ddl := IF(@exists=0, 'ALTER TABLE purchase_invoices ADD UNIQUE KEY uq_purchase_source_order (source_order_id)', 'DO 0');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+CREATE TABLE IF NOT EXISTS credit_bills (
+ id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
+ tenant_id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ station_id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ customer_id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ bill_number VARCHAR(120) NOT NULL,
+ bill_date DATE NOT NULL,
+ due_date DATE NOT NULL,
+ total_amount DECIMAL(20,2) NOT NULL,
+ status VARCHAR(16) NOT NULL DEFAULT 'ISSUED',
+ customer_snapshot TEXT NOT NULL,
+ notes TEXT,
+ created_by VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ created_at VARCHAR(40) NOT NULL,
+ void_reason TEXT,
+ voided_at VARCHAR(40),
+ UNIQUE KEY uq_credit_bill_number (tenant_id,bill_number),
+ KEY idx_credit_bill_station (station_id,bill_date),
+ FOREIGN KEY (tenant_id) REFERENCES tenants(id),
+ FOREIGN KEY (station_id) REFERENCES stations(id),
+ FOREIGN KEY (customer_id) REFERENCES customers(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS credit_bill_items (
+ id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
+ bill_id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ credit_entry_id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+ active_credit_entry_id VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL,
+ amount DECIMAL(20,2) NOT NULL,
+ entry_snapshot TEXT NOT NULL,
+ UNIQUE KEY uq_active_credit_bill_entry (active_credit_entry_id),
+ UNIQUE KEY uq_bill_entry (bill_id,credit_entry_id),
+ FOREIGN KEY (bill_id) REFERENCES credit_bills(id),
+ FOREIGN KEY (credit_entry_id) REFERENCES credit_entries(id),
+ FOREIGN KEY (active_credit_entry_id) REFERENCES credit_entries(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -424,6 +424,7 @@ public final class FinanceApi {
                     "debit", "0.00",
                     "credit", Money.money(pay.get("amount"))));
         }
+        events.addAll(PurchaseApi.ledgerEvents(auth.tenantId(), Db.str(supplier, "id"), stationIds));
         events.sort((a, b) -> String.valueOf(a.get("date")).compareTo(String.valueOf(b.get("date"))));
         BigDecimal opening = stationIds == null ? Money.d(supplier.get("opening_balance")) : BigDecimal.ZERO;
         BigDecimal running = opening;
@@ -1301,7 +1302,7 @@ public final class FinanceApi {
 
         Map<String, Object> created = Db.tx(() -> {
             Map<String, Object> station = auth.station(stationId);
-            Map<String, Object> supplier = Db.one("SELECT * FROM suppliers WHERE id = ? AND tenant_id = ?", supplierId, auth.tenantId());
+            Map<String, Object> supplier = Db.one("SELECT * FROM suppliers WHERE id = ? AND tenant_id = ? FOR UPDATE", supplierId, auth.tenantId());
             if (supplier == null) throw ApiException.notFound("Supplier not found");
             Map<String, Object> tank = loadAuthorizedTank(auth, tankId);
             if (!stationId.equals(Db.str(tank, "station_id"))) {
@@ -1320,6 +1321,8 @@ public final class FinanceApi {
                     auth.tenantId(), supplierId, invoiceNumber) != null) {
                 throw ApiException.conflict("A delivery invoice with this number already exists for this supplier");
             }
+            if (Db.one("SELECT id FROM purchase_invoices WHERE tenant_id=? AND supplier_id=? AND invoice_number=?", auth.tenantId(), supplierId, invoiceNumber) != null)
+                throw ApiException.conflict("Invoice number already exists in Purchase invoices");
             Map<String, Object> prod = Db.one("SELECT category FROM fuel_products WHERE id = ?", tankProductId);
             String category = prod == null ? null : Db.str(prod, "category");
             String densityObs = blankToNull(ctx.str("densityObserved"));

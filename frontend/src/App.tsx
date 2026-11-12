@@ -15,6 +15,7 @@ const Products = lazy(() => import('./pages/Products'));
 const Dispensers = lazy(() => import('./pages/Dispensers'));
 const Tanks = lazy(() => import('./pages/Tanks'));
 const Deliveries = lazy(() => import('./pages/Deliveries'));
+const Purchases = lazy(() => import('./pages/Purchases'));
 const Density = lazy(() => import('./pages/Density'));
 const Lubricants = lazy(() => import('./pages/Lubricants'));
 const Compliance = lazy(() => import('./pages/Compliance'));
@@ -23,6 +24,7 @@ const Readings = lazy(() => import('./pages/Readings'));
 const Shifts = lazy(() => import('./pages/Shifts'));
 const Sales = lazy(() => import('./pages/Sales'));
 const Customers = lazy(() => import('./pages/Customers'));
+const CreditBilling = lazy(() => import('./pages/CreditBilling'));
 const Suppliers = lazy(() => import('./pages/Suppliers'));
 const Finance = lazy(() => import('./pages/Finance'));
 const Reconciliation = lazy(() => import('./pages/Reconciliation'));
@@ -73,10 +75,10 @@ function CardAccessDenied() {
 const pages = [
   ['shifts', Shifts, 'shifts.read'], ['readings', Readings, 'readings.read'],
   ['sales', Sales, 'sales.read'], ['tanks', Tanks, 'stock.read'],
-  ['deliveries', Deliveries, 'deliveries.read'], ['density', Density, 'density.read'],
+  ['deliveries', Deliveries, 'deliveries.read'], ['purchases', Purchases, 'deliveries.read'], ['density', Density, 'density.read'],
   ['lubricants', Lubricants, 'lubricants.read'], ['compliance', Compliance, 'compliance.read'],
   ['devices', Devices, 'devices.read'], ['customers', Customers, 'customers.read'],
-  ['suppliers', Suppliers, 'suppliers.read'], ['finance', Finance, 'payments.read'],
+  ['credit-billing', CreditBilling, 'customers.read'], ['suppliers', Suppliers, 'suppliers.read'], ['finance', Finance, 'payments.read'],
   ['reconciliation', Reconciliation, 'reconciliation.read'], ['reports', Reports, 'reports.read'],
   ['stations', Stations, 'stations.read'], ['products', Products, 'products.read'],
   ['dispensers', Dispensers, 'dispensers.read'], ['employees', Employees, 'employees.read'],

@@ -414,14 +414,16 @@ export default function Tanks() {
         </Card>
       )}
 
-      <TankFormModal
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        stationId={stationId}
-        products={products.data ?? []}
-        loading={createTank.isPending}
-        onSubmit={(payload) => createTank.mutate(payload)}
-      />
+      {createOpen && (
+        <TankFormModal
+          open
+          onClose={() => setCreateOpen(false)}
+          stationId={stationId}
+          products={products.data ?? []}
+          loading={createTank.isPending}
+          onSubmit={(payload) => createTank.mutate(payload)}
+        />
+      )}
 
       {editTank && (
         <TankFormModal
@@ -516,6 +518,8 @@ function TankFormModal({
     calibrationReference: tank?.calibrationReference ?? '',
     status: tank?.status ?? 'ACTIVE',
   });
+  // The product list can arrive after the form opens; until one is picked, the first product is the choice.
+  const productId = form.productId || products[0]?.id || '';
 
   return (
     <Modal
@@ -525,7 +529,7 @@ function TankFormModal({
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button variant="primary" loading={loading} disabled={!form.code || !form.name || !form.productId} onClick={() => onSubmit({ ...form, stationId })}>
+          <Button variant="primary" loading={loading} disabled={!form.code || !form.name || !productId} onClick={() => onSubmit({ ...form, productId, stationId })}>
             {tank ? 'Save tank' : 'Create tank'}
           </Button>
         </>
@@ -535,7 +539,7 @@ function TankFormModal({
         <Field label="Tank code" required><Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} disabled={Boolean(tank)} /></Field>
         <Field label="Tank name" required><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
         <Field label="Fuel product" required>
-          <Select value={form.productId} onChange={(e) => setForm({ ...form, productId: e.target.value })} disabled={Boolean(tank)}>
+          <Select value={productId} onChange={(e) => setForm({ ...form, productId: e.target.value })} disabled={Boolean(tank)}>
             {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </Select>
         </Field>
@@ -678,7 +682,7 @@ function AdjustmentModal({ tank, onClose, loading, onSubmit }: { tank: Tank; onC
     >
       <div className="space-y-3">
         <Field label="Quantity (litres)" required hint="e.g. -12.5 to write off a measured loss"><Input inputMode="decimal" value={quantity} onChange={(e) => setQuantity(e.target.value)} /></Field>
-        <Field label="Reason" required><Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Dip variance approval, evaporation, calibration correction…" /></Field>
+        <Field label="Reason" required hint="At least 5 characters. It is kept in the audit trail."><Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Dip variance approval, evaporation, calibration correction…" /></Field>
       </div>
     </Modal>
   );
@@ -726,7 +730,7 @@ function TransferModal({ tanks, onClose, loading, onSubmit }: { tanks: Tank[]; o
         <Field label="From tank"><Select value={fromTankId} onChange={(e) => setFrom(e.target.value)}>{tanks.map((t) => <option key={t.id} value={t.id}>{t.code} · {t.productName}</option>)}</Select></Field>
         <Field label="To tank"><Select value={toTankId} onChange={(e) => setTo(e.target.value)}>{tanks.map((t) => <option key={t.id} value={t.id}>{t.code} · {t.productName}</option>)}</Select></Field>
         <Field label="Quantity (litres)" required><Input inputMode="decimal" value={quantity} onChange={(e) => setQuantity(e.target.value)} /></Field>
-        <Field label="Reason" required><Input value={reason} onChange={(e) => setReason(e.target.value)} /></Field>
+        <Field label="Reason" required hint="At least 5 characters. It is kept in the audit trail."><Input value={reason} onChange={(e) => setReason(e.target.value)} /></Field>
       </div>
     </Modal>
   );

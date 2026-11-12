@@ -178,7 +178,7 @@ export default function Sales() {
         description="Shift-derived nozzle sales and the immutable totalizer reading trail"
         actions={
           <>
-            <ExportCsvButton path={`/readings?stationId=${stationId}`} filename="petroflow-meter-readings" label="Export readings" />
+            {can('readings.read') && <ExportCsvButton path={`/readings?stationId=${stationId}`} filename="petroflow-meter-readings" label="Export readings" />}
             <Field label="Business date" className="mb-0">
               <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-auto" />
             </Field>
